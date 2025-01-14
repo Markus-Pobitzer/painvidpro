@@ -12,6 +12,11 @@ python-dotenv = "^1.0.1"
 viscon = {git = "git@github.com:Markus-Pobitzer/viscon.git"}
 yt-dlp = "^2025.1.12"
 opencv-python = "^4.10.0.84"
+pillow = "^11.1.0"
+huggingface-hub = "^0.27.1"
+torch = "^2.5.1"
+torchvision = "^0.20.1"
+sam-2 = {git = "git@github.com:facebookresearch/sam2.git", rev = "2b90b9f"}
 
 
 [tool.poetry.group.dev.dependencies]
