@@ -9,6 +9,9 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.12"
 python-dotenv = "^1.0.1"
+viscon = {git = "git@github.com:Markus-Pobitzer/viscon.git"}
+yt-dlp = "^2025.1.12"
+opencv-python = "^4.10.0.84"
 
 
 [tool.poetry.group.dev.dependencies]
