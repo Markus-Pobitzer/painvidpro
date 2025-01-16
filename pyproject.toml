@@ -12,6 +12,9 @@ python-dotenv = "^1.0.1"
 viscon = {git = "git@github.com:Markus-Pobitzer/viscon.git"}
 yt-dlp = "^2025.1.12"
 opencv-python = "^4.10.0.84"
+pillow = "^11.1.0"
+transformers = "^4.48.0"
+torch = "^2.5.1"
 
 
 [tool.poetry.group.dev.dependencies]
