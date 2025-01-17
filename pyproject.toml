@@ -13,6 +13,7 @@ viscon = {git = "git@github.com:Markus-Pobitzer/viscon.git"}
 yt-dlp = "^2025.1.12"
 scipy = "^1.15.1"
 opencv-python = "^4.10.0.84"
+tqdm = "^4.67.1"
 
 
 [tool.poetry.group.dev.dependencies]
