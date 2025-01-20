@@ -2,9 +2,10 @@
 
 import os
 from contextlib import contextmanager
-from typing import Dict
+from typing import Dict, List
 
 import cv2
+import numpy as np
 
 
 # Custom context manager for cv2.VideoCapture
@@ -20,6 +21,24 @@ def video_capture_context(video_path: str):
         yield cap
     finally:
         cap.release()
+
+
+def save_frames_as_video(frame_list: List[np.ndarray], output_path: str, fps: int = 30):
+    """Save the frames in the frame_list as a video.
+
+    Args:
+        frame_list: The list of frames.
+        output_path: The path to save the video.
+        fps: The frames per second.
+    """
+    height, width, _ = frame_list[0].shape
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    video_writer = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+
+    for frame in frame_list:
+        video_writer.write(frame)
+
+    video_writer.release()
 
 
 def extract_frames(video_path: str, output_folder: str, target_fps: int = 4) -> Dict[int, str]:
@@ -53,3 +72,26 @@ def extract_frames(video_path: str, output_folder: str, target_fps: int = 4) -> 
                 ret_dict[frame_count] = frame_name
             frame_count += 1
     return ret
+
+
+def overlay_mask_on_image(image: np.ndarray, mask: np.ndarray, color=(255, 0, 0), alpha=0.5) -> np.ndarray:
+    """
+    Overlays the mask on top of the image with a specified color and transparency.
+
+    Args:
+        image: The original image as a numpy array in cv2 BGR format.
+        mask: The mask as a numpy array.
+        color: The color to use for the overlay (default is blue).
+        alpha: The transparency level of the overlay (default is 0.5).
+
+    Returns:
+        A numpy array with the overlay.
+    """
+    # Create a color overlay image
+    overlay = np.zeros_like(image, dtype=np.uint8)
+    overlay[mask > 0] = color
+
+    # Blend the original image with the overlay using the specified transparency
+    blended = cv2.addWeighted(image, 1 - alpha, overlay, alpha, 0)
+
+    return blended
