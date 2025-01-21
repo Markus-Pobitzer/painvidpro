@@ -7,13 +7,13 @@ import numpy as np
 
 class OcclusionMaskingBase:
     def __init__(self):
-        self.params = {}
+        self.params: Dict[str, Any] = {}
 
     def set_parameters(self, params: Dict[str, Any]) -> Tuple[bool, str]:
         """Sets the parameters.
 
         Args:
-            params: A dict witht the parameters.
+            params: A dict with the parameters.
 
         Returns:
             A boolean indicating if the set up was successfull.

@@ -1,18 +1,17 @@
 """Implementation of OcclusionMaskingAccumulateDiff."""
 
-from typing import Any, Dict, List
+from typing import List
 
 import cv2
 import numpy as np
 
-from painvidpro.occlusion_masking.occlusion_masking_base import OcclusionMaskingBase
+from painvidpro.occlusion_masking.base import OcclusionMaskingBase
 
 
 class OcclusionMaskingAccumulateDiff(OcclusionMaskingBase):
     def __init__(self):
         """Class to compute occlusion masks."""
         super().__init__()
-        self.params: Dict[str, Any] = {}
         self.set_default_parameters()
 
     def set_default_parameters(self):
