@@ -2,9 +2,9 @@
 
 from typing import Any, Dict
 
-from painvidpro.occlusion_masking.occlusion_masking_accumulate_diff import OcclusionMaskingAccumulateDiff
-from painvidpro.occlusion_masking.occlusion_masking_base import OcclusionMaskingBase
-from painvidpro.occlusion_masking.occlusion_masking_frame_diff import OcclusionMaskingFrameDiff
+from painvidpro.occlusion_masking.accumulate_diff import OcclusionMaskingAccumulateDiff
+from painvidpro.occlusion_masking.base import OcclusionMaskingBase
+from painvidpro.occlusion_masking.frame_diff import OcclusionMaskingFrameDiff
 
 
 class OcclusionMaskingFactory:
