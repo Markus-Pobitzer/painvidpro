@@ -115,6 +115,9 @@ def prepare_intermediate_data(
 
     img_lab = cv2.cvtColor(frame, cv2.COLOR_BGR2Lab)
 
+    # Compute the difference from one frame to the next
+    # 255 indicates there was movement
+    # Threshold is 10
     for i in tqdm(range(1, N)):
         ret, frame = capture.read()
         if not ret:
@@ -126,27 +129,22 @@ def prepare_intermediate_data(
         result = np.zeros(frame.shape[:2], dtype=np.uint8)
         result[diff > threshold] = 255
 
-        img_lab = frame_lab.copy()
-        save_path = f"{intermediate_data_path_prefix}Lab_diff_binary_{get_next_number(i)}.png"
-        cv2.imwrite(save_path, result)
-
-    input1 = f"{intermediate_data_path_prefix}Lab_diff_binary_%04d.png"
-    print(input1)
-    capture1 = cv2.VideoCapture(input1)
-
-    for i in range(1, N):
-        ret, _frame = capture1.read()
-        if not ret:
-            break
-        # cv2.countNonZero expects greyscale
-        if _frame.ndim == 3:
-            _frame = cv2.cvtColor(_frame, cv2.COLOR_BGR2GRAY)
-
-        if cv2.countNonZero(_frame) < max_num:
+        # sign_array[i] == 0, means less than 50 pixels changed
+        # sign_array[i] == 1, means more than 50 pixels changed
+        if cv2.countNonZero(result) < max_num:
             sign_array[i] = 0
         else:
             sign_array[i] = 1
 
+        img_lab = frame_lab.copy()
+        save_path = f"{intermediate_data_path_prefix}Lab_diff_binary_{get_next_number(i)}.png"
+        cv2.imwrite(save_path, result)
+
+    # selected_sign[i] == 0, means nothing special.
+    # selected_sign[i] == 1, no change in previous, current, and next frame
+    #                        but incoming change at frame i + 2.
+    # selected_sign[i] == 2, previous frame changed but current and next two
+    #                        do not.
     selected_sign = [0] * N
     selected_sign[0] = 2
     selected_sign[N - 1] = 1
@@ -165,23 +163,30 @@ def prepare_intermediate_data(
     averaged_index: List[int] = []
 
     last_positon = N
-    for i in range(N - 1, 0, -1):
+    # Index to start checking for possible keyframes
+    for i in range(N - 1, -1, -1):
         if selected_sign[i] == 1:
             last_positon = i
             break
 
     i = 0
+    # If we think we have a sequence of unmoving frames, save the average as a keyframe.
+    # Save the frames in between to apply color shifts.
     while i < N:
+        # Start of a frame sequence that is good
         if selected_sign[i] == 2:
             ret, frame2 = capture.read()
             if not ret:
                 break
             good_frame_name = f"{intermediate_data_path_prefix}good_original_frame_{get_next_number(i)}.png"
             cv2.imwrite(good_frame_name, frame2)
+            # Start compution of mean at the first good frame
             Mean = frame2.astype(np.float32)
+            # j is index of first frame in the sequence
             j = i
             flag = 2
 
+        # Process frames in the good sequence until a change is noticeable
         if flag == 2:
             i += 1
             ret, frame2 = capture.read()
@@ -189,26 +194,34 @@ def prepare_intermediate_data(
                 break
             good_frame_name = f"{intermediate_data_path_prefix}good_original_frame_{get_next_number(i)}.png"
             cv2.imwrite(good_frame_name, frame2)
+            # Update mean of good sequence
             Mean += frame2.astype(np.float32)
 
+            # This frame is still good but a frame with changes incoming
             if selected_sign[i] == 1:
+                # The saved frame is actual an average of frame list
                 averaged_index.append(1)
                 Mean /= i - j + 1
                 Mean = Mean.astype(np.uint8)
                 save_name1 = f"{intermediate_data_path_prefix}averaged_{get_next_number(count)}.png"
                 cv2.imwrite(save_name1, Mean)
                 count += 1
+                # Indicating that the good sequence ends
                 flag = 1
 
         if flag == 1:
             if i == last_positon:
                 break
             i += 1
+            # The good sequence comes to an end or is already over.
+            # Frame at position i may or may not have movements.
+            # Processes all frames until a new good sequence comes.
             if selected_sign[i] == 0:
                 averaged_index.append(0)
                 ret, frame2 = capture.read()
                 if not ret:
                     break
+                # A bit unclear why we are saving these frames
                 save_name2 = f"{intermediate_data_path_prefix}averaged_{get_next_number(count)}.png"
                 cv2.imwrite(save_name2, frame2)
                 count += 1
