@@ -41,13 +41,17 @@ def save_frames_as_video(frame_list: List[np.ndarray], output_path: str, fps: in
     video_writer.release()
 
 
-def extract_frames(video_path: str, output_folder: str, target_fps: int = 4) -> Dict[int, str]:
+def extract_frames(
+    video_path: str, output_folder: str, target_fps: int = -1, file_ending: str = "png"
+) -> Dict[int, str]:
     """Extracts the frames of a video.
 
     Args:
         video_path: The path of the video.
         output_folder: The output folder to store the frames.
-        target_fps: Number of frames to extract per second.
+        target_fps: Number of frames to extract per second. If
+            it is smaller equals 0, save all frames.
+        file_ending: The file ending.
 
     Returns:
         A dict storing the frame index as key and the name of the frame on the disk as the value.
@@ -58,15 +62,15 @@ def extract_frames(video_path: str, output_folder: str, target_fps: int = 4) -> 
 
     with video_capture_context(video_path) as cap:
         fps = cap.get(cv2.CAP_PROP_FPS)
-        frame_interval = int(fps / target_fps)
+        frame_interval = int(fps / target_fps) if target_fps > 0 else 0
         frame_count: int = 0
 
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
-            if frame_count % frame_interval == 0:
-                frame_name = f"frame_{frame_count:08d}.jpg"
+            if frame_interval == 0 or (frame_count % frame_interval == 0):
+                frame_name = f"frame_{frame_count:08d}.{file_ending}"
                 frame_filename = os.path.join(output_folder, frame_name)
                 cv2.imwrite(frame_filename, frame)
                 ret_dict[frame_count] = frame_name
