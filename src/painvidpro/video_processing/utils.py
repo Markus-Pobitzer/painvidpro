@@ -23,6 +23,22 @@ def video_capture_context(video_path: str):
         cap.release()
 
 
+# Custom context manager for cv2.VideoCapture
+@contextmanager
+def video_writer_context(output_path: str, width: int, height: int, fourcc: str = "mp4v", fps: int = 30):
+    """Context Manager to manage cv2.VideoWriter.
+
+    Args:
+        video_path: The path to the video.
+    """
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    video_writer = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+    try:
+        yield video_writer
+    finally:
+        video_writer.release()
+
+
 def save_frames_as_video(frame_list: List[np.ndarray], output_path: str, fps: int = 30):
     """Save the frames in the frame_list as a video.
 
@@ -32,13 +48,9 @@ def save_frames_as_video(frame_list: List[np.ndarray], output_path: str, fps: in
         fps: The frames per second.
     """
     height, width, _ = frame_list[0].shape
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    video_writer = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
-
-    for frame in frame_list:
-        video_writer.write(frame)
-
-    video_writer.release()
+    with video_writer_context(output_path, width=width, height=height, fps=fps) as video_writer:
+        for frame in frame_list:
+            video_writer.write(frame)
 
 
 def extract_frames(
