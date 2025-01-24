@@ -80,7 +80,7 @@ class ImageAlignmentLightGlue(ImageAlignmentBase):
                 points1.append(pt1)
                 good_matches.append(match)
 
-        ret_points0 = np.array(points1, dtype=np.float32)
+        ret_points0 = np.array(points0, dtype=np.float32)
         ret_points1 = np.array(points1, dtype=np.float32)
 
         # Check if there are enough good matches after filtering
