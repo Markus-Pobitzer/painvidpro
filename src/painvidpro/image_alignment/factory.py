@@ -3,6 +3,7 @@
 from typing import Any, Dict
 
 from painvidpro.image_alignment.base import ImageAlignmentBase
+from painvidpro.image_alignment.light_glue import ImageAlignmentLightGlue
 from painvidpro.image_alignment.orb import ImageAlignmentOrb
 
 
@@ -25,6 +26,8 @@ class ImageAlignmentFactory:
         instance: ImageAlignmentBase
         if algorithm == "ImageAlignmentOrb":
             instance = ImageAlignmentOrb()
+        elif algorithm == "ImageAlignmentLightGlue":
+            instance = ImageAlignmentLightGlue()
         else:
             raise ValueError(f"Unknown algorithm: {algorithm}")
 
