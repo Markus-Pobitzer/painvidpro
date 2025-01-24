@@ -1,4 +1,4 @@
-"""Base class for the imge alignment."""
+"""Base class for the image alignment."""
 
 from enum import Enum
 from typing import Any, Dict, List, Tuple
