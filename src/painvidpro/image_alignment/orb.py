@@ -1,4 +1,4 @@
-"""Base class for the imge alignment."""
+"""Class for the image alignment."""
 
 from typing import Any, Dict, List, Tuple, Union
 
@@ -13,7 +13,7 @@ from painvidpro.video_processing.utils import video_capture_context, video_write
 
 class ImageAlignmentOrb(ImageAlignmentBase):
     def __init__(self):
-        """Base class to align images."""
+        """Class to align images."""
         super().__init__()
         self.set_default_parameters()
 
@@ -36,7 +36,7 @@ class ImageAlignmentOrb(ImageAlignmentBase):
             "max_homography_deviation": 10,
             "check_keypoint_distance": True,
             "max_keypoint_distance": 7,
-            "diasble_tqdm": False,
+            "disable_tqdm": False,
             "save_failed_alignments": False,  # Saves the frames that failed to align on disk as is
         }
 
@@ -188,7 +188,7 @@ class ImageAlignmentOrb(ImageAlignmentBase):
         max_homography_deviation = self.params.get("max_homography_deviation", 10)
         check_keypoint_distance = self.params.get("check_keypoint_distance", True)
         max_keypoint_distance = self.params.get("max_keypoint_distance", 7)
-        diasble_tqdm = self.params.get("diasble_tqdm", False)
+        disable_tqdm = self.params.get("disable_tqdm", False)
 
         # Detect ORB keypoints and descriptors
         orb = cv2.ORB_create()
@@ -203,7 +203,7 @@ class ImageAlignmentOrb(ImageAlignmentBase):
 
         return_list: List[Tuple[AlignmentStatus, np.ndarray, np.ndarray, Any, Any, Any]] = []
 
-        for img2 in tqdm(frame_list, desc="Matching frames to ref_frame", disable=diasble_tqdm):
+        for img2 in tqdm(frame_list, desc="Matching frames to ref_frame", disable=disable_tqdm):
             res = self._align_images(
                 orb=orb,
                 bf=bf,
@@ -246,7 +246,7 @@ class ImageAlignmentOrb(ImageAlignmentBase):
         max_homography_deviation = self.params.get("max_homography_deviation", 10)
         check_keypoint_distance = self.params.get("check_keypoint_distance", True)
         max_keypoint_distance = self.params.get("max_keypoint_distance", 7)
-        diasble_tqdm = self.params.get("diasble_tqdm", False)
+        disable_tqdm = self.params.get("disable_tqdm", False)
         save_failed_alignments = self.params.get("save_failed_alignments", False)
 
         return_list: List[Tuple[AlignmentStatus, Any, Any, Any]] = []
@@ -265,7 +265,7 @@ class ImageAlignmentOrb(ImageAlignmentBase):
             length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
             with video_writer_context(output_video, width=width, height=height, fps=fps) as video_writer:
-                for _ in tqdm(range(length), desc="Matching frames to ref_frame", disable=diasble_tqdm):
+                for _ in tqdm(range(length), desc="Matching frames to ref_frame", disable=disable_tqdm):
                     succ, frame, _, kp1, kp2, matches = self._align_images(
                         orb=orb,
                         bf=bf,
