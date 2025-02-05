@@ -9,6 +9,7 @@ import numpy as np
 from tqdm import tqdm
 
 from painvidpro.timelapse.utils import color_shift_recover, diff
+from painvidpro.video_processing.utils import video_writer_context
 
 
 # Original code: https://github.com/CraGL/timelapse/blob/master/1%20preprocessing/s1_whole_sequence_colorshift/colorshift_filter.cpp
@@ -112,7 +113,7 @@ class ColorShift(VideoFilter):
         return True, output_frame
 
 
-def process_video(input_path: str, output_path: str, filter_obj: VideoFilter, output_vide_format: str = "DIVX"):
+def process_video(input_path: str, output_path: str, filter_obj: VideoFilter, output_vide_format: str = "mp4v"):
     """
     Processes a video using the specified filter and saves the output.
 
@@ -121,7 +122,7 @@ def process_video(input_path: str, output_path: str, filter_obj: VideoFilter, ou
         params = {"Percent": 0.2, "Threshold": 30}
         color_shift = ColorShift(params)
 
-        process_video('input_video.mp4', 'output_video.avi', color_shift)
+        process_video('input_video.mp4', 'output_video.mp4', color_shift)
     ```
 
     Args:
@@ -139,17 +140,15 @@ def process_video(input_path: str, output_path: str, filter_obj: VideoFilter, ou
     fps = cap.get(cv2.CAP_PROP_FPS)
     numb_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    out = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc(*output_vide_format), fps, (frame_width, frame_height))
+    with video_writer_context(output_path, frame_width, frame_height, output_vide_format, fps) as out:
+        with tqdm(total=numb_frames, desc="Frames") as pbar:
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
 
-    with tqdm(total=numb_frames, desc="Frames") as pbar:
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-
-            processed_frame = filter_obj.next_frame(frame)
-            out.write(processed_frame)
-            pbar.update(1)
+                processed_frame = filter_obj.next_frame(frame)
+                out.write(processed_frame)
+                pbar.update(1)
 
     cap.release()
-    out.release()
