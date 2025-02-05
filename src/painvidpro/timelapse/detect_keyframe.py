@@ -169,6 +169,7 @@ def prepare_intermediate_data(
             last_positon = i
             break
 
+    keyframe_index_list = []
     i = 0
     # If we think we have a sequence of unmoving frames, save the average as a keyframe.
     # Save the frames in between to apply color shifts.
@@ -205,6 +206,9 @@ def prepare_intermediate_data(
                 Mean = Mean.astype(np.uint8)
                 save_name1 = f"{intermediate_data_path_prefix}averaged_{get_next_number(count)}.png"
                 cv2.imwrite(save_name1, Mean)
+                keyframe_index_list.append((i + j) // 2)
+                # keyframe_index_list.append(i) # First occurence
+                # keyframe_index_list.append(j) # Last occurence
                 count += 1
                 # Indicating that the good sequence ends
                 flag = 1
@@ -271,7 +275,7 @@ def prepare_intermediate_data(
             cv2.imwrite(save_name4, frame4)
             index += 1
 
-    print("get keyframes!")
+    return keyframe_index_list
 
 
 def main():
