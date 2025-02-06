@@ -4,6 +4,7 @@ from typing import Union
 
 import cv2
 import numpy as np
+from PIL import Image
 
 
 def process_input(obj: Union[np.ndarray, str, cv2.VideoCapture]) -> np.ndarray:
@@ -39,3 +40,15 @@ def process_input(obj: Union[np.ndarray, str, cv2.VideoCapture]) -> np.ndarray:
         raise TypeError(
             "Input must be either an np.ndarray, a str representing an image path, or a cv2.VideoCapture object."
         )
+
+
+def convert_cv2_to_pil(img: np.ndarray) -> Image:
+    """Converts an image stored in cv2 fromat to a PIL Image.
+
+    Args:
+        img: Image in cv2 format, assuming BGR channel ordering.
+
+    Returns:
+        An image in PIL format.
+    """
+    return Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))

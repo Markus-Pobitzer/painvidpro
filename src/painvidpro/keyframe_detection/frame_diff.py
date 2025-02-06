@@ -11,7 +11,7 @@ from painvidpro.keyframe_detection.base import KeyframeDetectionBase
 
 class KeyframeDetectionFrameDiff(KeyframeDetectionBase):
     def __init__(self):
-        """Base class to detect keyframes."""
+        """Class to detect keyframes."""
         super().__init__()
         self.set_default_parameters()
 
