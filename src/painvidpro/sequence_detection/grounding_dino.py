@@ -45,10 +45,11 @@ class SequenceDetectionGroundingDino(SequenceDetectionBase):
             "device": "cuda",
             "batch_size": 1,
             "prompt": "a hand.",
-            "box_threshold": 0.4,
-            "text_threshold": 0.3,
+            "box_threshold": 0.7,
+            "text_threshold": 0.7,
             "max_frames_to_consider": 200,
             "frame_steps": 10,
+            "disable_tqdm": True,
         }
 
     def _object_detection(self, image_list: List[np.ndarray]) -> Tuple[List[List[str]], List[np.ndarray]]:
@@ -94,13 +95,14 @@ class SequenceDetectionGroundingDino(SequenceDetectionBase):
             The first index of frame_idx_list gets returned where the object was detected.
             If no object was detected -1 gets returned.
         """
-        print(frame_idx_list)
-        batch_size = self.params.get("batch_size", 10)
-        for batch in tqdm(batch_list(frame_idx_list, batch_size)):
+        batch_size = self.params.get("batch_size", 1)
+        disable_tqdm = self.params.get("disable_tqdm", True)
+        for batch in tqdm(batch_list(frame_idx_list, batch_size), disable=disable_tqdm, desc="Detecting objects"):
             batch_img_list = [process_input(frame_list[idx]) for idx in batch]
             label_list, scores_list = self._object_detection(batch_img_list)
             for frame_idx, label, score in zip(batch, label_list, scores_list):
-                print(frame_idx, label, score)
+                # If text_threshold is set too high bounding boxes without any labels get predicted, so we remove them
+                label = [lbl for lbl in label if lbl != ""]
                 if len(label) != 0:
                     return frame_idx
         return -1
