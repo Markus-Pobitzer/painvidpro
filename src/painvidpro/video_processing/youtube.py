@@ -25,30 +25,43 @@ def download_video(url: str, output_path: str):
         ydl.download([url])
 
 
-def get_ids_from_playlist(playlist_url: str) -> List[Dict[str, Any]]:
-    """Get all Video Ids that are contained in a YouTube playlist.
+def get_info_from_yt_url(url: str) -> List[Dict[str, Any]]:
+    """Get all Video Ids related to the YouTube url.
+
+    If the URL corresponds to a playlist, the information of all videos get returned.
+    If the URL corresponds to a single video, only the information of the video gets returned.
+
+    For a playlist URL make sure that the format is: "https://www.youtube.com/playlist?list=..."
+    otherwise the function will only retrieve the first video if any. Bad playlsit url example:
+    "https://www.youtube.com/watch?v=...&list=..."
 
     Args:
-        playlist_url: The playlist URL.
+        url: The YouTube URL.
 
     Returns:
         A list of YouTube metadata as a dict.
     """
+    key_list = ["id", "title", "license", "channel", "channel_id"]
+    ret: List[Dict[str, Any]] = []
     ydl_opts = {
         "outtmpl": "%(id)s%(title)s%(license)s%(channel_id)s%(channel)s",
         "quiet": True,
         "ignoreerrors": True,
+        "extract_flat": True,
     }
-    ret: List[Dict[str, Any]] = []
-    key_list = ["id", "title", "license", "channel", "channel_id"]
-
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        result = ydl.extract_info(playlist_url, download=False)
+        result = ydl.extract_info(url, download=False)
+        if not result:
+            return ret
 
         if "entries" in result:
+            # A playlist
             for item in result["entries"]:
                 ret.append(_extract_meta(item, key_list))
-    return ret
+        else:
+            # A single video
+            ret.append(_extract_meta(result, key_list))
+        return ret
 
 
 def get_metadata_from_vido(video_id: str) -> Dict[str, Any]:
