@@ -24,6 +24,108 @@ class KeyframeDetectionFrameDiff(KeyframeDetectionBase):
             "disable_tqdm": True,
         }
 
+    def _detect_still_frames_timelapse(self, sign_array: List[int]) -> List[List[int]]:
+        """Detect keyframes as still frames.
+
+        Original code: https://github.com/CraGL/timelapse/blob/master\
+                /1%20preprocessing/s2_extract_keyframes/detect_keyframe.cpp
+
+        Args:
+            sign_array: The sign array.
+
+        Returns:
+            The keyframes as a list of list.
+        """
+        # selected_sign[i] == 0, means nothing special.
+        # selected_sign[i] == 1, no change in previous, current, and next frame
+        #                        but incoming change at frame i + 2.
+        # selected_sign[i] == 2, previous frame changed but current and next two
+        #                        do not.
+        N = len(sign_array)
+        selected_sign = [0] * N
+        selected_sign[0] = 2
+        selected_sign[N - 1] = 1
+
+        for i in range(2, N - 2):
+            if sign_array[i - 1 : i + 3] == [0, 0, 0, 1]:
+                selected_sign[i] = 1
+            if sign_array[i - 1 : i + 3] == [1, 0, 0, 0]:
+                selected_sign[i] = 2
+
+        flag = 0
+        ret: List[List[int]] = []
+        keyframe_sequence: List[int] = []
+
+        last_positon = N
+        # Index to start checking for possible keyframes
+        for i in range(N - 1, -1, -1):
+            if selected_sign[i] == 1:
+                last_positon = i
+                break
+
+        i = 0
+        while i < N:
+            # Start of a frame sequence that is good
+            if selected_sign[i] == 2:
+                keyframe_sequence = [i]
+                flag = 2
+
+            # Process frames in the good sequence until a change is noticeable
+            if flag == 2:
+                i += 1
+                keyframe_sequence.append(i)
+
+                # This frame is still good but a frame with changes incoming
+                if selected_sign[i] == 1:
+                    ret.append(keyframe_sequence)
+                    # Indicating that the good sequence ends
+                    flag = 1
+
+            if flag == 1:
+                if i == last_positon:
+                    break
+                i += 1
+
+        return ret
+
+    def _detect_still_frames(self, sign_array: List[int]) -> List[List[int]]:
+        """Detect keyframes as still frames.
+
+        Handles beginning and end of sign array slightly different then
+        _detect_still_frames_timelapse.
+
+        Args:
+            sign_array: The sign array.
+
+        Returns:
+            The keyframes as a list of list.
+        """
+        ret: List[List[int]] = []
+
+        if len(sign_array) < 5:
+            return ret
+
+        keyframe_sequence: List[int] = [0]
+        for i in range(1, len(sign_array) - 2):
+            if sign_array[i - 1 : i + 3] == [1, 0, 0, 0]:
+                keyframe_sequence = [i]
+            elif sign_array[i - 1 : i + 3] == [0, 0, 0, 1]:
+                keyframe_sequence.append(i)
+                ret.append(keyframe_sequence)
+                keyframe_sequence = []
+            elif len(keyframe_sequence) > 0:
+                if sign_array[i] == 0:
+                    keyframe_sequence.append(i)
+                else:
+                    keyframe_sequence = []
+
+        if len(keyframe_sequence) > 0 and sign_array[-2] == 0:
+            n = len(sign_array)
+            keyframe_sequence += [n - 2, n - 1]
+            ret.append(keyframe_sequence)
+
+        return ret
+
     def _detect_keyframes(
         self,
         frame_list: Union[Union[List[np.ndarray], List[str]], cv2.VideoCapture],
@@ -84,58 +186,7 @@ class KeyframeDetectionFrameDiff(KeyframeDetectionBase):
 
             img_lab = frame_lab.copy()
 
-        # selected_sign[i] == 0, means nothing special.
-        # selected_sign[i] == 1, no change in previous, current, and next frame
-        #                        but incoming change at frame i + 2.
-        # selected_sign[i] == 2, previous frame changed but current and next two
-        #                        do not.
-        selected_sign = [0] * N
-        selected_sign[0] = 2
-        selected_sign[N - 1] = 1
-
-        for i in range(2, N - 2):
-            if sign_array[i - 1 : i + 3] == [0, 0, 0, 1]:
-                selected_sign[i] = 1
-            if sign_array[i - 1 : i + 3] == [1, 0, 0, 0]:
-                selected_sign[i] = 2
-
-        flag = 0
-        ret: List[List[int]] = []
-        keyframe_sequence: List[int] = []
-
-        last_positon = N
-        # Index to start checking for possible keyframes
-        for i in range(N - 1, -1, -1):
-            if selected_sign[i] == 1:
-                last_positon = i
-                break
-
-        i = 0
-        # If we think we have a sequence of unmoving frames, save the average as a keyframe.
-        # Save the frames in between to apply color shifts.
-        while i < N:
-            # Start of a frame sequence that is good
-            if selected_sign[i] == 2:
-                keyframe_sequence = [i]
-                flag = 2
-
-            # Process frames in the good sequence until a change is noticeable
-            if flag == 2:
-                i += 1
-                keyframe_sequence.append(i)
-
-                # This frame is still good but a frame with changes incoming
-                if selected_sign[i] == 1:
-                    ret.append(keyframe_sequence)
-                    # Indicating that the good sequence ends
-                    flag = 1
-
-            if flag == 1:
-                if i == last_positon:
-                    break
-                i += 1
-
-        return ret
+        return self._detect_still_frames(sign_array=sign_array)
 
     def detect_keyframes(self, frame_list: Union[List[np.ndarray], List[str]]) -> List[List[int]]:
         """
