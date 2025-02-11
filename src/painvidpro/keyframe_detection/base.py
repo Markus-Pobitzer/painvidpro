@@ -1,6 +1,6 @@
 """Base class for the Keyframe detection."""
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Union
 
 import numpy as np
 
@@ -26,7 +26,7 @@ class KeyframeDetectionBase:
     def set_default_parameters(self):
         raise NotImplementedError("This method should be implemented by the child class.")
 
-    def detect_keyframes(self, frame_list: List[np.ndarray]) -> List[List[int]]:
+    def detect_keyframes(self, frame_list: Union[List[np.ndarray], List[str]]) -> List[List[int]]:
         """
         Detects frames which have no occlusions.
 
@@ -40,14 +40,14 @@ class KeyframeDetectionBase:
         """
         raise NotImplementedError("This method should be implemented by the child class.")
 
-    def detect_keyframes_on_disk(self, frame_path_list: List[str]) -> List[List[int]]:
+    def detect_keyframes_on_disk(self, frame_path: str) -> List[List[int]]:
         """
         Detects frames which have no occlusions.
 
         Images are loaded directly from disk
 
         Args:
-            frame_list: List of frames in cv2 image format.
+            frame_path: Path to video file.
 
         Returns:
             List of frame sequences. Each sequence corresponds to one Keyframe.

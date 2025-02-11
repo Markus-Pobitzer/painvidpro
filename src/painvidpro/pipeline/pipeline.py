@@ -7,7 +7,11 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+from tqdm import tqdm
+
 from painvidpro.pipeline.input_file_format import VideoItem
+from painvidpro.processors.factory import ProcessorsFactory
+from painvidpro.utils.metadata import load_metadata, save_metadata
 from painvidpro.video_processing.youtube import get_info_from_yt_url
 
 
@@ -26,18 +30,6 @@ class Pipeline:
     def _ensure_dirs(self) -> None:
         self.base_dir.mkdir(parents=True, exist_ok=True)
         self.youtube_dir.mkdir(parents=True, exist_ok=True)
-
-    def _load_metadata(self, video_dir: Path) -> Dict:
-        metadata_path = video_dir / "metadata.json"
-        if metadata_path.exists():
-            with open(metadata_path, "r") as f:
-                return json.load(f)
-        return {}
-
-    def _save_metadata(self, video_dir: Path, metadata: Dict) -> None:
-        metadata_path = video_dir / "metadata.json"
-        with open(metadata_path, "w") as f:
-            json.dump(metadata, f, indent=2)
 
     def save(self) -> None:
         """Save pipeline state to JSON"""
@@ -89,9 +81,10 @@ class Pipeline:
                 metadata = video_data
                 metadata["art_media"] = video_item.art_media
                 metadata["processed"] = False
-                self._save_metadata(video_dir=video_dir, metadata=metadata)
+                save_metadata(video_dir=video_dir, metadata=metadata)
                 # Shallow copy of video_item to overwrite url
                 entry = dataclasses.replace(video_item)
+                entry.url = video_id
                 self.video_item_dict["youtube"][video_id] = dataclasses.asdict(entry)
                 ret.append(str(video_dir))
         return True, ret
@@ -122,28 +115,25 @@ class Pipeline:
                     )
             else:
                 self.logger.info(f"No support for source {vi.source} in Video Item {vi}.")
+        self.save()
         return ret
 
     def process_video(self, video_data: Dict[str, Any]):
         """Applies the processor onto a video item."""
         source = video_data["source"]
         if source == "youtube":
-            pass
-
-            # TODO: Needs to be implemented
-            # video_id = video_data["url"]
-            # video_dir = (self.base_dir / source) / video_id
-
-            # processor = ProcessorFactory().load(processor_name, processor_config)
-            # processor.process(video_dir)
+            video_dir = self.youtube_dir / video_data["url"]
+            for processor in video_data["video_processor"]:
+                processor = ProcessorsFactory().build(processor["name"], processor["config"])
+                processor.process([video_dir])
         else:
             self.logger.info(f"Processing for source {source} is not supported. In Video data {video_data}.")
 
     def process(self):
         """Processes all video entries in the Pipeline that have not been processed yet."""
         for source in self.video_item_dict.keys():
-            for video_id in self.video_item_dict[source].keys():
+            for video_id in tqdm(self.video_item_dict[source].keys(), desc="Processing video"):
                 video_dir = (self.base_dir / source) / video_id
-                video_metadata = self._load_metadata(video_dir=video_dir)
+                _, video_metadata = load_metadata(video_dir=video_dir)
                 if not video_metadata["processed"]:
                     self.process_video(video_data=self.video_item_dict[source][video_id])
