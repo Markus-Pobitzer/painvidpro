@@ -7,6 +7,8 @@ import numpy as np
 from tqdm import tqdm
 
 from painvidpro.keyframe_detection.base import KeyframeDetectionBase
+from painvidpro.utils.image_processing import process_input
+from painvidpro.video_processing.utils import video_capture_context
 
 
 class KeyframeDetectionFrameDiff(KeyframeDetectionBase):
@@ -22,36 +24,10 @@ class KeyframeDetectionFrameDiff(KeyframeDetectionBase):
             "disable_tqdm": True,
         }
 
-    def _process_input(self, obj: Union[np.ndarray, str]) -> np.ndarray:
-        """
-        Processes the input object and returns an image in np.ndarray format.
-
-        Args:
-            obj: Input object which can be either an np.ndarray or a string representing an image path.
-
-        Returns:
-            np.ndarray: The image in np.ndarray format.
-
-        Raises:
-            TypeError: If the input is neither an np.ndarray nor a string.
-            ValueError: If the string does not correspond to a valid image path.
-        """
-        if isinstance(obj, np.ndarray):
-            return obj
-        elif isinstance(obj, str):
-            try:
-                image = cv2.imread(obj)
-                if image is None:
-                    raise ValueError("The provided string does not correspond to a valid image path.")
-                return image
-            except Exception as e:
-                raise ValueError(f"An error occurred while loading the image: {e}")
-        else:
-            raise TypeError("Input must be either an np.ndarray or a str representing an image path.")
-
     def _detect_keyframes(
         self,
-        frame_list: List[Union[np.ndarray, str]],
+        frame_list: Union[Union[List[np.ndarray], List[str]], cv2.VideoCapture],
+        numb_frames: int,
         diff_threshold: int = 10,
         max_num_changes: int = 50,
         disable_tqdm: bool = True,
@@ -64,6 +40,7 @@ class KeyframeDetectionFrameDiff(KeyframeDetectionBase):
 
             Args:
                 frame_list: List of frames.
+                numb_frames: The number of frames.
                 diff_threshold: Threshold for the difference in pixels.
                 max_num_changes: The maximum number of pixels that can be
                     changed such that no movments are picked up in the frame.
@@ -78,19 +55,25 @@ class KeyframeDetectionFrameDiff(KeyframeDetectionBase):
                 TypeError: If the content of frame_list is neither an np.ndarray nor a string.
                 ValueError: If the string does not correspond to a valid image path.
         """
-        N = len(frame_list)
+        N = numb_frames
 
         # For the sign array we have following:
         # 0 means less than max_num_changes pixels changed
         # 1 means more than max_num_changes pixels changed
         sign_array = [0] * N
 
-        frame = self._process_input(frame_list[0])
+        if isinstance(frame_list, List):
+            frame = process_input(frame_list[0])
+        else:
+            frame = process_input(frame_list)
         img_lab = cv2.cvtColor(frame, cv2.COLOR_BGR2Lab)
 
         # Compute the difference from one frame to the next
         for i in tqdm(range(1, N), desc="Keyframe detection [compute frame diff]", disable=disable_tqdm):
-            frame = self._process_input(frame_list[i])
+            if isinstance(frame_list, List):
+                frame = process_input(frame_list[i])
+            else:
+                frame = process_input(frame_list)
             frame_lab = cv2.cvtColor(frame, cv2.COLOR_BGR2Lab)
 
             diff = np.sqrt(np.sum((frame_lab - img_lab) ** 2, axis=-1))
@@ -154,12 +137,12 @@ class KeyframeDetectionFrameDiff(KeyframeDetectionBase):
 
         return ret
 
-    def detect_keyframes(self, frame_list: List[np.ndarray]) -> List[List[int]]:
+    def detect_keyframes(self, frame_list: Union[List[np.ndarray], List[str]]) -> List[List[int]]:
         """
         Detects frames which have no occlusions.
 
         Args:
-            frame_list: List of frames in cv2 image format.
+            frame_list: List of frames in cv2 image format or path on disk if string.
 
         Returns:
             List of frame sequences. Each sequence corresponds to one Keyframe.
@@ -174,19 +157,20 @@ class KeyframeDetectionFrameDiff(KeyframeDetectionBase):
         disable_tqdm = self.params.get("disable_tqdm", True)
         return self._detect_keyframes(
             frame_list=frame_list,
+            numb_frames=len(frame_list),
             diff_threshold=diff_threshold,
             max_num_changes=max_num_changes,
             disable_tqdm=disable_tqdm,
         )
 
-    def detect_keyframes_on_disk(self, frame_path_list: List[str]) -> List[List[int]]:
+    def detect_keyframes_on_disk(self, frame_path: str) -> List[List[int]]:
         """
         Detects frames which have no occlusions.
 
         Images are loaded directly from disk
 
         Args:
-            frame_list: List of frames in cv2 image format.
+            frame_path: Video file path.
 
         Returns:
             List of frame sequences. Each sequence corresponds to one Keyframe.
@@ -194,15 +178,18 @@ class KeyframeDetectionFrameDiff(KeyframeDetectionBase):
             is no changes between them.
 
         Raises:
-            TypeError: If the content of frame_path_list is not a string.
+            TypeError: If the content of frame_path is not a string.
             ValueError: If the string does not correspond to a valid image path.
         """
         diff_threshold = self.params.get("diff_threshold", 10)
         max_num_changes = self.params.get("max_num_changes", 50)
         disable_tqdm = self.params.get("disable_tqdm", True)
-        return self._detect_keyframes(
-            frame_list=frame_path_list,
-            diff_threshold=diff_threshold,
-            max_num_changes=max_num_changes,
-            disable_tqdm=disable_tqdm,
-        )
+        with video_capture_context(video_path=frame_path) as cap:
+            numb_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            return self._detect_keyframes(
+                frame_list=cap,
+                numb_frames=numb_frames,
+                diff_threshold=diff_threshold,
+                max_num_changes=max_num_changes,
+                disable_tqdm=disable_tqdm,
+            )
