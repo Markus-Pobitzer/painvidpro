@@ -118,22 +118,22 @@ class Pipeline:
         self.save()
         return ret
 
-    def process_video(self, video_data: Dict[str, Any]):
+    def process_video(self, video_data: Dict[str, Any], batch_size: int = 1):
         """Applies the processor onto a video item."""
         source = video_data["source"]
         if source == "youtube":
             video_dir = self.youtube_dir / video_data["url"]
             for processor in video_data["video_processor"]:
                 processor = ProcessorsFactory().build(processor["name"], processor["config"])
-                processor.process([video_dir])
+                processor.process([video_dir], batch_size=batch_size)
         else:
             self.logger.info(f"Processing for source {source} is not supported. In Video data {video_data}.")
 
-    def process(self):
+    def process(self, batch_size: int = 1):
         """Processes all video entries in the Pipeline that have not been processed yet."""
         for source in self.video_item_dict.keys():
             for video_id in tqdm(self.video_item_dict[source].keys(), desc="Processing video"):
                 video_dir = (self.base_dir / source) / video_id
                 _, video_metadata = load_metadata(video_dir=video_dir)
                 if not video_metadata["processed"]:
-                    self.process_video(video_data=self.video_item_dict[source][video_id])
+                    self.process_video(video_data=self.video_item_dict[source][video_id], batch_size=batch_size)
