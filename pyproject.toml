@@ -22,10 +22,14 @@ transformers = "^4.48.2"
 
 
 [tool.poetry.group.dev.dependencies]
-ruff = "^0.8.6"
+ruff = "^0.9.3"
 pre-commit = "^3.7.1"
 mypy = "^1.10.1"
 
+
+
+[tool.poetry.group.extras.dependencies]
+gradio = "^5.15.0"
 
 [build-system]
 requires = ["poetry-core"]
