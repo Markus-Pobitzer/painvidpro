@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from typing import Dict, List
 
 import cv2
+import ffmpeg
 import numpy as np
 
 
@@ -111,3 +112,46 @@ def overlay_mask_on_image(image: np.ndarray, mask: np.ndarray, color=(255, 0, 0)
     blended = cv2.addWeighted(image, 1 - alpha, overlay, alpha, 0)
 
     return blended
+
+
+def median_of_video(video_path: str, num_samples: int = 100) -> np.ndarray:
+    """Computes the median of the video.
+
+    Samples num_samples frames from the video, get median
+    based on the samples.
+
+    Args:
+        video_path: The path to the video.
+        num_samples: The number of samples.
+
+    Returns:
+        The median image.
+    """
+    # Using ffmpeg since cv2 may not be reliable see:
+    # https://github.com/opencv/opencv/issues/9053
+
+    # Probe the video to get its properties
+    probe = ffmpeg.probe(video_path)
+    video_info = next(stream for stream in probe["streams"] if stream["codec_type"] == "video")
+    width = int(video_info["width"])
+    height = int(video_info["height"])
+    length = int(video_info["nb_frames"])
+
+    # In case there are more samples than frames
+    num_samples = min(num_samples, length)
+    # sampled_frames = np.zeros((num_samples, height, width, 3), dtype=np.uint8)
+
+    # Generate frame indices to sample
+    frame_indices = np.linspace(0, length - 1, num=num_samples, dtype=int)
+
+    select_filter = "+".join(f"eq(n,{idx})" for idx in frame_indices)
+
+    # Use ffmpeg to extract the specific frame
+    out, _ = (
+        ffmpeg.input(video_path)
+        .filter("select", select_filter)
+        .output("pipe:", format="rawvideo", pix_fmt="rgb24", vsync="0")
+        .run(capture_stdout=True, capture_stderr=True)
+    )
+    sampled_frames = np.frombuffer(out, dtype=np.uint8).reshape(-1, height, width, 3)
+    return np.median(sampled_frames, axis=0)
