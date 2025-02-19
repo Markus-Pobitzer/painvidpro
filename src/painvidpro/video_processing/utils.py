@@ -154,4 +154,4 @@ def median_of_video(video_path: str, num_samples: int = 100) -> np.ndarray:
         .run(capture_stdout=True, capture_stderr=True)
     )
     sampled_frames = np.frombuffer(out, dtype=np.uint8).reshape(-1, height, width, 3)
-    return np.median(sampled_frames, axis=0)
+    return np.uint8(np.median(sampled_frames, axis=0))
