@@ -1,4 +1,4 @@
-"""Base class for the Keyframe detection."""
+"""Class for the Keyframe detection."""
 
 import logging
 import os
@@ -29,6 +29,7 @@ class ProcessorKeyframe(ProcessorBase):
         self.video_file_name = "video.mp4"
         self.metadata_name = "metadata.json"
         self.keyframe_folder_name = "keyframes"
+        self.reference_frame_name = "reference_frame.png"
         self.zfill_num = 8
 
     def set_parameters(self, params: Dict[str, Any]) -> Tuple[bool, str]:
@@ -134,19 +135,31 @@ class ProcessorKeyframe(ProcessorBase):
                 keyframe_dir = video_dir / self.keyframe_folder_name
                 keyframe_dir.mkdir(parents=True, exist_ok=True)
                 # Write them to disk
-                selected_keyframe_list = []
-                with video_capture_context(video_path=video_file_path) as cap:
-                    for keyframes in keyframe_list:
-                        # Only take keyframes that are between start and end frame
-                        if keyframes[0] >= start_frame_idx and keyframes[-1] <= end_frame_idx:
-                            keyframe_idx = keyframes[len(keyframes) // 2]
-                            selected_keyframe_list.append(keyframe_idx)
-                            cap.set(cv2.CAP_PROP_POS_FRAMES, keyframe_idx - 1)
+                selected_keyframe_list: List[int] = []
+                for keyframes in keyframe_list:
+                    # Only take keyframes that are between start and end frame
+                    if keyframes[0] >= start_frame_idx and keyframes[-1] <= end_frame_idx:
+                        keyframe_idx = keyframes[len(keyframes) // 2]
+                        selected_keyframe_list.append(keyframe_idx)
+                # Should be sorted, just to make sure
+                selected_keyframe_list.sort()
+
+                if len(selected_keyframe_list) > 0:
+                    # We explicetly iterate over all frames to be sure we get the one
+                    # see: https://github.com/opencv/opencv/issues/9053
+                    with video_capture_context(video_path=video_file_path) as cap:
+                        j = 0
+                        for i in range(end_frame_idx + 1):
                             res, frame = cap.read()
-                            if res:
-                                keyframe_path = f"frame_{str(keyframe_idx).zfill(self.zfill_num)}.png"
+                            if not res:
+                                break
+                            if i == selected_keyframe_list[j]:
+                                keyframe_path = f"frame_{str(i).zfill(self.zfill_num)}.png"
                                 keyframe_path = str(keyframe_dir / keyframe_path)
                                 cv2.imwrite(keyframe_path, frame)
+                                j += 1
+                                if j >= len(selected_keyframe_list):
+                                    break
 
                 metadata["keyframe_list"] = keyframe_list
                 metadata["selected_keyframe_list"] = selected_keyframe_list
