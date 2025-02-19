@@ -4,6 +4,7 @@ from typing import Any, Dict
 
 from painvidpro.processors.base import ProcessorBase
 from painvidpro.processors.keyframe import ProcessorKeyframe
+from painvidpro.processors.loomis_keyframe import ProcessorLoomisKeyframe
 
 
 class ProcessorsFactory:
@@ -25,6 +26,8 @@ class ProcessorsFactory:
         instance: ProcessorBase
         if processor == "ProcessorKeyframe":
             instance = ProcessorKeyframe()
+        elif processor == "ProcessorLoomisKeyframe":
+            instance = ProcessorLoomisKeyframe()
         else:
             raise ValueError(f"Unknown processor: {processor}")
 
