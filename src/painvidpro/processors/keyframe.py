@@ -210,6 +210,7 @@ class ProcessorKeyframe(ProcessorBase):
                 continue
 
             # Processing was successfull
+            metadata["processed_video_name"] = self.video_file_name
             metadata["processed"] = True
             save_metadata(video_dir=video_dir, metadata=metadata, metadata_name=self.metadata_name)
             ret[i] = True
