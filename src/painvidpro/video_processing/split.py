@@ -6,7 +6,7 @@ import numpy as np
 from painvidpro.video_processing.utils import video_capture_context
 
 
-def estimate_split_width(image: np.ndarray) -> int:
+def estimate_split_width(image: np.ndarray, left_border: float = 0.0, right_border: float = 1.0) -> int:
     """Returns the column/width value where the image can be split vertically.
 
     The assumption is that the image is a concatination of two images
@@ -15,6 +15,10 @@ def estimate_split_width(image: np.ndarray) -> int:
 
     Args:
         image: The image as an numpy array.
+        left_border: value in range [0, 1]. All vlaues left of left_border
+            are set to 0 and have no influence.
+        right_border: value in range [0, 1]. All values right of right_border
+            are set to 0 and have no influence.
 
     Returns:
         The pixel value from the left.
@@ -28,6 +32,11 @@ def estimate_split_width(image: np.ndarray) -> int:
 
     # Find the column with the biggest value
     col_sum = np.sum(dst, axis=0)
+    # Set values outside of the borders to 0
+    w = col_sum.size
+    col_sum[: int(left_border * w)] = 0
+    col_sum[int(right_border * w) :] = 0
+    # Return index of biggest value
     argmax = np.argmax(col_sum)
     return argmax
 
