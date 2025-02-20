@@ -40,9 +40,11 @@ def get_video_path(sub_subfolder, video_name: str = "video.mp4"):
     return os.path.join(sub_subfolder, video_name)
 
 
-def load_video_and_keyframes(sub_subfolder: str, metadata: Dict[str, Any]) -> Tuple[str, List[int]]:
+def load_video_and_keyframes(
+    sub_subfolder: str, metadata: Dict[str, Any], video_name: str = "video.mp4"
+) -> Tuple[str, List[int]]:
     """Function to load video and keyframes"""
-    video_path = os.path.join(sub_subfolder, "video.mp4")
+    video_path = os.path.join(sub_subfolder, video_name)
     keyframes = metadata.get("selected_keyframe_list", [])
     return video_path, keyframes
 
@@ -104,6 +106,18 @@ def vis_progress_distribution(progress_dist: List[int], width=1000, height=25) -
     return image
 
 
+def get_reference_frame(reference_frame_path: str, video_path: str, keyframes: List[int]) -> np.ndarray:
+    """Loads the reference frame."""
+    img = cv2.imread(reference_frame_path)
+    if img is not None:
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        return img
+    try:
+        return get_frame(video_path, keyframes[-1])
+    except Exception as _:
+        return np.zeros((250, 250, 3)) + (255, 0, 0)
+
+
 # Gradio app
 def gradio_app(root_folder: str):
     """The Gradio App for visualization of the Keyframes."""
@@ -116,7 +130,10 @@ def gradio_app(root_folder: str):
 
     def update_display(selected_index):
         sub_subfolder, metadata = processed_metadata[selected_index]
-        video_path, keyframes = load_video_and_keyframes(sub_subfolder, metadata)
+        video_name = metadata.get("processed_video_name", "video.mp4")
+        reference_frame_name = metadata.get("reference_frame_name", "reference_frame.png")
+        reference_frame_path = os.path.join(sub_subfolder, reference_frame_name)
+        video_path, keyframes = load_video_and_keyframes(sub_subfolder, metadata, video_name=video_name)
         if len(keyframes) > 0:
             try:
                 ret_keyframe = get_frame(video_path, keyframes[0])
@@ -128,8 +145,9 @@ def gradio_app(root_folder: str):
         # To show how well distributed the keyframes are
         progress_bin_list = compute_progress_dist(metadata)
         prog_dist_img = vis_progress_distribution(progress_bin_list)
+        reference_frame = get_reference_frame(reference_frame_path, video_path, keyframes)
         # return video_path, ret_keyframe
-        return ret_keyframe, prog_dist_img
+        return reference_frame, ret_keyframe, prog_dist_img
 
     with gr.Blocks() as demo:
         gr.Markdown("## Video and Keyframe Viewer")
@@ -153,19 +171,23 @@ def gradio_app(root_folder: str):
         # video_output = gr.Video(label="Video")
         keyframe_slider = gr.Slider(label="Keyframes", minimum=0, maximum=0, step=1)
         image_progress = gr.Image(label="Progress distribution", type="numpy")
-        image_output = gr.Image(label="Selected Keyframe", type="numpy")
+        with gr.Row():
+            image_reference = gr.Image(label="Reference Frame", type="numpy")
+            image_output = gr.Image(label="Selected Keyframe", type="numpy")
 
         prev_button = gr.Button("Previous")
         next_button = gr.Button("Next")
 
         def update_keyframe_slider(selected_index):
             sub_subfolder, metadata = processed_metadata[selected_index]
-            _, keyframes = load_video_and_keyframes(sub_subfolder, metadata)
+            video_name = metadata.get("processed_video_name", "video.mp4")
+            _, keyframes = load_video_and_keyframes(sub_subfolder, metadata, video_name=video_name)
             return gr.update(maximum=len(keyframes) - 1, value=0)
 
         def update_image_output(selected_index, keyframe_index):
             sub_subfolder, metadata = processed_metadata[selected_index]
-            video_path, keyframes = load_video_and_keyframes(sub_subfolder, metadata)
+            video_name = metadata.get("processed_video_name", "video.mp4")
+            video_path, keyframes = load_video_and_keyframes(sub_subfolder, metadata, video_name=video_name)
             try:
                 ret_keyframe = get_frame(video_path, keyframes[keyframe_index])
             except Exception as _:
@@ -174,7 +196,8 @@ def gradio_app(root_folder: str):
 
         def update_info_panel(selected_index):
             sub_subfolder, metadata = processed_metadata[selected_index]
-            video_path = get_video_path(sub_subfolder)
+            video_name = metadata.get("processed_video_name", "video.mp4")
+            video_path = get_video_path(sub_subfolder, video_name=video_name)
             channel = metadata.get("channel", "")
             art_media = "; ".join(metadata.get("art_media", []))
             numb_frames = metadata.get("number_frames", -1)
@@ -188,7 +211,9 @@ def gradio_app(root_folder: str):
         )
 
         # selected_index.change(update_display, inputs=selected_index, outputs=[video_output, image_output])
-        selected_index.change(update_display, inputs=selected_index, outputs=[image_output, image_progress])
+        selected_index.change(
+            update_display, inputs=selected_index, outputs=[image_reference, image_output, image_progress]
+        )
         selected_index.change(update_keyframe_slider, inputs=selected_index, outputs=[keyframe_slider])
         selected_index.change(
             update_info_panel,
