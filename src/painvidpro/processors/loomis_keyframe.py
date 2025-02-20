@@ -44,7 +44,7 @@ class ProcessorLoomisKeyframe(ProcessorKeyframe):
                 if not res:
                     break
                 if idx == frame_index:
-                    split_width = estimate_split_width(frame)
+                    split_width = estimate_split_width(frame, left_border=0.4, right_border=0.6)
                     return True, split_width
                 idx += 1
         return False, -1
@@ -114,6 +114,7 @@ class ProcessorLoomisKeyframe(ProcessorKeyframe):
                 continue
 
             # Processing was successfull
+            metadata["processed_video_name"] = self.video_painting_name
             metadata["processed"] = True
             save_metadata(video_dir=video_dir, metadata=metadata, metadata_name=self.metadata_name)
             ret[i] = True
