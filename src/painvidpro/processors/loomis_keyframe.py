@@ -100,14 +100,24 @@ class ProcessorLoomisKeyframe(ProcessorKeyframe):
                 continue
 
             if not os.path.isfile(video_left) or not os.path.isfile(video_right):
-                # Splitting the real image: portrait of model left and painting video on the right
-                split_horizontal(video_file_path, video_left, video_right, split_width)
+                try:
+                    # Splitting the real image: portrait of model left and painting video on the right
+                    split_horizontal(video_file_path, video_left, video_right, split_width)
+                except Exception as e:
+                    self.logger.info((f" Failed to split video {video_file_path}." f"\nException:\n{e}"))
+                    continue
 
             if not os.path.isfile(reference_frame_path):
-                # Extracting the portrait image
-                median_frame = median_of_video(video_left)
-                median_frame = cv2.cvtColor(median_frame, cv2.COLOR_BGR2RGB)
-                cv2.imwrite(reference_frame_path, median_frame)
+                try:
+                    # Extracting the portrait image
+                    median_frame = median_of_video(video_left)
+                    median_frame = cv2.cvtColor(median_frame, cv2.COLOR_BGR2RGB)
+                    cv2.imwrite(reference_frame_path, median_frame)
+                except Exception as e:
+                    self.logger.info(
+                        (f" Failed to extract reference image from video {video_left}." f"\nException:\n{e}")
+                    )
+                    continue
 
             # Detecting and extracting the keyframes
             if not self._detect_keyframes(video_dir=video_dir, video_file_path=video_right, metadata=metadata):
