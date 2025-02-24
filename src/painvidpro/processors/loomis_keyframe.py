@@ -1,5 +1,6 @@
 """Class for the Loomis Keyframe detection."""
 
+import logging
 import os
 from pathlib import Path
 from typing import List, Tuple
@@ -45,6 +46,8 @@ class ProcessorLoomisKeyframe(ProcessorKeyframe):
                     break
                 if idx == frame_index:
                     split_width = estimate_split_width(frame, left_border=0.4, right_border=0.6)
+                    # Adding one pixel, it leads to better results
+                    split_width += 1
                     return True, split_width
                 idx += 1
         return False, -1
@@ -69,6 +72,12 @@ class ProcessorLoomisKeyframe(ProcessorKeyframe):
         ret = [False] * len(video_dir_list)
         for i, vd in enumerate(video_dir_list):
             video_dir = Path(vd)
+            log_file = str(video_dir / "ProcessorLoomisKeyframe.log")
+            logging.basicConfig(
+                filename=log_file,
+                filemode="a",
+                force=True,
+            )
             video_file_path = str(video_dir / self.video_file_name)
             video_left = str(video_dir / self.video_portrait_name)
             video_right = str(video_dir / self.video_painting_name)
@@ -128,4 +137,10 @@ class ProcessorLoomisKeyframe(ProcessorKeyframe):
             metadata["processed"] = True
             save_metadata(video_dir=video_dir, metadata=metadata, metadata_name=self.metadata_name)
             ret[i] = True
+
+        # Clear file logging
+        logging.basicConfig(
+            filename=None,
+            force=True,
+        )
         return ret

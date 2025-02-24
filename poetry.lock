@@ -2552,6 +2552,25 @@ mpmath = ">=1.1.0,<1.4"
 dev = ["hypothesis (>=6.70.0)", "pytest (>=7.1.0)"]
 
 [[package]]
+name = "timm"
+version = "1.0.15"
+description = "PyTorch Image Models"
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = [
+    {file = "timm-1.0.15-py3-none-any.whl", hash = "sha256:5a3dc460c24e322ecc7fd1f3e3eb112423ddee320cb059cc1956fbc9731748ef"},
+    {file = "timm-1.0.15.tar.gz", hash = "sha256:756a3bc30c96565f056e608a9b559daed904617eaadb6be536f96874879b1055"},
+]
+
+[package.dependencies]
+huggingface_hub = "*"
+pyyaml = "*"
+safetensors = "*"
+torch = "*"
+torchvision = "*"
+
+[[package]]
 name = "tokenizers"
 version = "0.21.0"
 description = ""
@@ -3027,4 +3046,4 @@ test = ["pytest (>=8.1,<9.0)", "pytest-rerunfailures (>=14.0,<15.0)"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "b4a2ad565081fa8b42dff48e1344ee3fe969edba81d8f5aafb8e9de0e19cdb66"
+content-hash = "218f73d3073608d4519ef2471b21299dea619191998a20a7fa071747bac280a4"

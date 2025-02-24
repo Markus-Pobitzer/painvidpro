@@ -23,7 +23,11 @@ class ProcessorKeyframe(ProcessorBase):
         super().__init__()
         self.set_default_parameters()
         self.logger = logging.getLogger(__name__)
-        logging.basicConfig(level=logging.INFO)
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s,%(msecs)03d %(name)s %(levelname)s %(message)s",
+            datefmt="%d-%m-%Y %H:%M:%S",
+        )
         self.sequence_detector: SequenceDetectionBase
         self.keyframe_detector: KeyframeDetectionBase
         self.video_file_name = "video.mp4"
