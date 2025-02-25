@@ -67,6 +67,7 @@ class OcclusionMaskingRMBG(OcclusionMaskingBase):
             frame_list: List of frames in cv2 image format.
                 Can also be a np.ndarray with shape [B, H, W, C], where B is the number
                 of images, H the height, W the width and C the number of channels.
+            offload_model: Loads the model to CPU after usage.
 
         Returns:
             List of masks, one for each input frame where an occlusion may exist.

@@ -34,6 +34,7 @@ class ProcessorKeyframe(ProcessorBase):
         self.metadata_name = "metadata.json"
         self.keyframe_folder_name = "keyframes"
         self.reference_frame_name = "reference_frame.png"
+        self.extr_folder_name = "extracted_frames"
         self.zfill_num = 8
 
     def set_parameters(self, params: Dict[str, Any]) -> Tuple[bool, str]:
@@ -64,6 +65,7 @@ class ProcessorKeyframe(ProcessorBase):
             "sequence_detection_config": {},
             "keyframe_detection_algorithm": "KeyframeDetectionFrameDiff",
             "keyframe_detection_config": {},
+            "disable_tqdm": True,
         }
 
     def _download_video(self, video_file_path: str, metadata: Dict[str, Any]) -> bool:
