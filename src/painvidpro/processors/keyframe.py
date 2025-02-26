@@ -6,9 +6,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import cv2
+import numpy as np
 
 from painvidpro.keyframe_detection.base import KeyframeDetectionBase
 from painvidpro.keyframe_detection.factory import KeyframeDetectionFactory
+from painvidpro.object_detection.base import ObjectDetectionBase
+from painvidpro.object_detection.factory import ObjectDetectionFactory
 from painvidpro.processors.base import ProcessorBase
 from painvidpro.sequence_detection.base import SequenceDetectionBase
 from painvidpro.sequence_detection.factory import SequenceDetectionFactory
@@ -30,6 +33,7 @@ class ProcessorKeyframe(ProcessorBase):
         )
         self.sequence_detector: SequenceDetectionBase
         self.keyframe_detector: KeyframeDetectionBase
+        self.keyframe_verifier: ObjectDetectionBase
         self.video_file_name = "video.mp4"
         self.metadata_name = "metadata.json"
         self.keyframe_folder_name = "keyframes"
@@ -55,6 +59,10 @@ class ProcessorKeyframe(ProcessorBase):
             self.keyframe_detector = KeyframeDetectionFactory().build(
                 self.params["keyframe_detection_algorithm"], self.params["keyframe_detection_config"]
             )
+            if self.params.get("verify_keyframes", True):
+                self.keyframe_verifier = ObjectDetectionFactory().build(
+                    self.params["keyframe_verification_algorithm"], self.params["keyframe_verification_config"]
+                )
         except ValueError as e:
             return False, str(e)
         return True, ""
@@ -65,6 +73,9 @@ class ProcessorKeyframe(ProcessorBase):
             "sequence_detection_config": {},
             "keyframe_detection_algorithm": "KeyframeDetectionFrameDiff",
             "keyframe_detection_config": {},
+            "verify_keyframes": True,
+            "keyframe_verification_algorithm": "ObjectDetectionGroundingDino",
+            "keyframe_verification_config": {},
             "disable_tqdm": True,
         }
 
@@ -120,6 +131,20 @@ class ProcessorKeyframe(ProcessorBase):
 
         return True
 
+    def _verify_keyframe_list(self, frame_list: List[np.ndarray], offload_model: bool = False) -> List[bool]:
+        """Veirifes if the frames in frame_list contain specific objects.
+
+        Args:
+            frame_list: List of frames to check.
+            offload_model: If set offloads the object detector to CPU.
+
+        Returns:
+            A list of bools, indicating for each frame in frame_list
+            if no occlusion object was detected.
+        """
+        detected_object_list = self.keyframe_verifier.detect_objects(frame_list, offload_model=offload_model)
+        return [(len(obj_list) == 0) for obj_list in detected_object_list]
+
     def _detect_keyframes(self, video_dir: Path, video_file_path: str, metadata: Dict[str, Any]) -> bool:
         """Detects the keyframes if not already done.
 
@@ -131,48 +156,57 @@ class ProcessorKeyframe(ProcessorBase):
         Returns:
             Boolean indicating success.
         """
-        if "keyframe_list" not in metadata:
-            try:
-                start_frame_idx = metadata["start_frame_idx"]
-                end_frame_idx = metadata["end_frame_idx"]
+        if "keyframe_list" in metadata:
+            return True
 
-                # Detect keyframes
-                keyframe_list = self.keyframe_detector.detect_keyframes_on_disk(frame_path=video_file_path)
-                keyframe_dir = video_dir / self.keyframe_folder_name
-                keyframe_dir.mkdir(parents=True, exist_ok=True)
-                # Write them to disk
-                selected_keyframe_list: List[int] = []
-                for keyframes in keyframe_list:
-                    # Only take keyframes that are between start and end frame
-                    if keyframes[0] >= start_frame_idx and keyframes[-1] <= end_frame_idx:
-                        keyframe_idx = keyframes[len(keyframes) // 2]
-                        selected_keyframe_list.append(keyframe_idx)
-                # Should be sorted, just to make sure
-                selected_keyframe_list.sort()
+        try:
+            start_frame_idx = metadata["start_frame_idx"]
+            end_frame_idx = metadata["end_frame_idx"]
+            verify_keyframes = self.params.get("verify_keyframes", True)
 
-                if len(selected_keyframe_list) > 0:
-                    # We explicetly iterate over all frames to be sure we get the one
-                    # see: https://github.com/opencv/opencv/issues/9053
-                    with video_capture_context(video_path=video_file_path) as cap:
-                        j = 0
-                        for i in range(end_frame_idx + 1):
-                            res, frame = cap.read()
-                            if not res:
+            # Detect keyframes
+            keyframe_list = self.keyframe_detector.detect_keyframes_on_disk(frame_path=video_file_path)
+            keyframe_dir = video_dir / self.keyframe_folder_name
+            keyframe_dir.mkdir(parents=True, exist_ok=True)
+            # Write them to disk
+            selected_keyframe_list: List[int] = []
+            for keyframes in keyframe_list:
+                # Only take keyframes that are between start and end frame
+                if keyframes[0] >= start_frame_idx and keyframes[-1] <= end_frame_idx:
+                    keyframe_idx = keyframes[len(keyframes) // 2]
+                    selected_keyframe_list.append(keyframe_idx)
+            # Should be sorted, just to make sure
+            selected_keyframe_list.sort()
+
+            filtered_keyframe_list: List[int] = []
+            if len(selected_keyframe_list) > 0:
+                # We explicetly iterate over all frames to be sure we get the one
+                # see: https://github.com/opencv/opencv/issues/9053
+                with video_capture_context(video_path=video_file_path) as cap:
+                    j = 0
+                    for i in range(end_frame_idx + 1):
+                        res, frame = cap.read()
+                        if not res:
+                            break
+                        if i == selected_keyframe_list[j]:
+                            # Verify keyframe
+                            if verify_keyframes and not self._verify_keyframe_list([frame])[0]:
+                                continue
+                            # Save keyframe
+                            keyframe_path = f"frame_{str(i).zfill(self.zfill_num)}.png"
+                            keyframe_path = str(keyframe_dir / keyframe_path)
+                            cv2.imwrite(keyframe_path, frame)
+                            filtered_keyframe_list.append(i)
+                            j += 1
+                            if j >= len(selected_keyframe_list):
                                 break
-                            if i == selected_keyframe_list[j]:
-                                keyframe_path = f"frame_{str(i).zfill(self.zfill_num)}.png"
-                                keyframe_path = str(keyframe_dir / keyframe_path)
-                                cv2.imwrite(keyframe_path, frame)
-                                j += 1
-                                if j >= len(selected_keyframe_list):
-                                    break
 
-                metadata["keyframe_list"] = keyframe_list
-                metadata["selected_keyframe_list"] = selected_keyframe_list
-                save_metadata(video_dir=video_dir, metadata=metadata, metadata_name=self.metadata_name)
-            except Exception as e:
-                self.logger.info(f" Failed detecting keyframes for {video_file_path}: {e}")
-                return False
+            metadata["keyframe_list"] = keyframe_list
+            metadata["selected_keyframe_list"] = filtered_keyframe_list
+            save_metadata(video_dir=video_dir, metadata=metadata, metadata_name=self.metadata_name)
+        except Exception as e:
+            self.logger.info(f" Failed detecting keyframes for {video_file_path}: {e}")
+            return False
         return True
 
     def process(self, video_dir_list: List[str], batch_size: int = -1) -> List[bool]:
@@ -212,6 +246,7 @@ class ProcessorKeyframe(ProcessorBase):
             ):
                 continue
 
+            # Detect Keyframes
             if not self._detect_keyframes(video_dir=video_dir, video_file_path=video_file_path, metadata=metadata):
                 continue
 
