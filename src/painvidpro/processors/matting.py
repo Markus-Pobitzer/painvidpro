@@ -300,6 +300,15 @@ class ProcessorMatting(ProcessorKeyframe):
         return True
 
     def save_reference_frame(self, metadata: Dict[str, Any], reference_frame_path: str) -> bool:
+        """Saves the last extracted frame as reference frame.
+
+        Args:
+            metadata: The metadata.
+            reference_frame_path: The path to the reference frame.
+
+        Returns:
+            A bool indicating if the saving was successfull.
+        """
         if isfile(reference_frame_path):
             return True
 
