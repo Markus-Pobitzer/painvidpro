@@ -41,6 +41,43 @@ def estimate_split_width(image: np.ndarray, left_border: float = 0.0, right_bord
     return argmax
 
 
+def estimate_split_width_from_frame(
+    video_file_path: str, frame_index: int = 0, left_border: float = 0.0, right_border: float = 1.0
+) -> int:
+    """Estimates the split width based on a specific frame in video_file_path.
+
+    If frame index is not specified or set to a value smaller than 0, the
+    first frame of the video is taken, equivalent to frame_index = 0.
+
+    Args:
+        video_file_path: String of the video path.
+        frame_index: The frame to choose from video_file_path.
+        left_border: value in range [0, 1]. All vlaues left of left_border
+            are set to 0 and have no influence.
+        right_border: value in range [0, 1]. All values right of right_border
+            are set to 0 and have no influence.
+
+    Returns:
+        Estimate of the split width of the video.
+    """
+    if frame_index < 0:
+        frame_index = 0
+
+    idx = 0
+    with video_capture_context(video_path=video_file_path) as cap:
+        while True:
+            res, frame = cap.read()
+            if not res:
+                break
+            if idx == frame_index:
+                split_width = estimate_split_width(frame, left_border=left_border, right_border=right_border)
+                # Adding one pixel, it leads to better results
+                split_width += 1
+                return split_width
+            idx += 1
+    return -1
+
+
 def split_horizontal(
     video: str, output_left: str, output_right: str, split_width: int = -1, cv2_video_format: str = "mp4v"
 ):
