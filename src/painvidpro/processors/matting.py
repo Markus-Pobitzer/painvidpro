@@ -1,7 +1,7 @@
 """Class for the Loomis Keyframe detection."""
 
 import logging
-from os.path import isfile
+from os.path import isfile, join
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -271,12 +271,12 @@ class ProcessorMatting(ProcessorKeyframe):
                         kernel_size=kernel_size,
                     )
                     median_frame_idx = int(f_idx_list[size_0 // 2])
-                    median_fram_path = f"frame_{str(median_frame_idx).zfill(self.zfill_num)}.png"
-                    median_fram_path = str(extr_frame_dir / median_fram_path)
+                    median_fram_name = f"frame_{str(median_frame_idx).zfill(self.zfill_num)}.png"
+                    median_fram_path = str(extr_frame_dir / median_fram_name)
                     cv2.imwrite(median_fram_path, median_frame)
 
                     ret_frame_idx.append(median_frame_idx)
-                    median_frame_paths.append(median_fram_path)
+                    median_frame_paths.append(join(self.extr_folder_name, median_fram_name))
                     # Use the median frame in the computation of the next median frame
                     prev_extr_frame = median_frame
 
@@ -297,6 +297,7 @@ class ProcessorMatting(ProcessorKeyframe):
             self.logger.info(f"Was not able to extract median frames from {video_path}: {e}")
             return False
 
+        self.logger.info(f"Successfully extracted {len(median_frame_paths)} median frames.")
         return True
 
     def save_reference_frame(self, metadata: Dict[str, Any], reference_frame_path: str) -> bool:
@@ -337,6 +338,8 @@ class ProcessorMatting(ProcessorKeyframe):
                 )
             )
             return False
+
+        self.logger.info(f"Successfully saved reference frame to {reference_frame_path}.")
         return True
 
     def process(self, video_dir_list: List[str], batch_size: int = -1) -> List[bool]:
