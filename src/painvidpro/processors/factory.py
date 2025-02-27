@@ -5,6 +5,7 @@ from typing import Any, Dict
 from painvidpro.processors.base import ProcessorBase
 from painvidpro.processors.keyframe import ProcessorKeyframe
 from painvidpro.processors.loomis_keyframe import ProcessorLoomisKeyframe
+from painvidpro.processors.loomis_matting import ProcessorLoomisMatting
 from painvidpro.processors.matting import ProcessorMatting
 
 
@@ -31,6 +32,8 @@ class ProcessorsFactory:
             instance = ProcessorLoomisKeyframe()
         elif processor == "ProcessorMatting":
             instance = ProcessorMatting()
+        elif processor == "ProcessorLoomisMatting":
+            instance = ProcessorLoomisMatting()
         else:
             raise ValueError(f"Unknown processor: {processor}")
 
