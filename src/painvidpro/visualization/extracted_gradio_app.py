@@ -1,32 +1,39 @@
-"""Visualization for detected keyframes."""
+"""Visualization extracted frames."""
 
 import os
+from typing import Optional
 
 import gradio as gr
 import numpy as np
 
 from painvidpro.visualization.utils import (
+    cleanup,
     compute_progress_dist,
-    filter_processed_metadata,
+    create_temp_file,
+    filter_processed_metadata_extracted_frames,
     get_frame,
     get_reference_frame,
     get_video_folders,
     get_video_path,
+    load_log_files,
     load_pipeline,
     load_video_and_keyframes,
+    read_file,
+    save_video_from_frames,
     vis_progress_distribution,
 )
 
 
 # Gradio app
 def gradio_app(root_folder: str):
-    """The Gradio App for visualization of the Keyframes."""
+    """The Gradio App for visualization of the extracted frames."""
     pipeline = load_pipeline(root_folder)
     numb_video = 0
     for key in pipeline.get("video_item_dict", {}).keys():
         numb_video += len(pipeline["video_item_dict"][key].keys())
     sub_subfolders = get_video_folders(root_folder)
-    processed_metadata = filter_processed_metadata(sub_subfolders)
+    processed_metadata = filter_processed_metadata_extracted_frames(sub_subfolders)
+    tmp_video_path = create_temp_file()
 
     def update_display(selected_index):
         sub_subfolder, metadata = processed_metadata[selected_index]
@@ -46,6 +53,7 @@ def gradio_app(root_folder: str):
         progress_bin_list = compute_progress_dist(metadata)
         prog_dist_img = vis_progress_distribution(progress_bin_list)
         reference_frame = get_reference_frame(reference_frame_path, video_path, keyframes)
+
         # return video_path, ret_keyframe
         return reference_frame, ret_keyframe, prog_dist_img
 
@@ -59,6 +67,10 @@ def gradio_app(root_folder: str):
 
         selected_index = gr.Number(label="Select Index", value=0)
 
+        with gr.Row():
+            prev_button = gr.Button("< Previous")
+            next_button = gr.Button("Next >")
+
         info_panel = gr.Accordion("Video Information", open=False)
         with info_panel:
             video_path_text = gr.Textbox(label="Video Path")
@@ -68,15 +80,15 @@ def gradio_app(root_folder: str):
             start_frame_idx_text = gr.Textbox(label="Start Frame Index")
             end_frame_idx_text = gr.Textbox(label="End Frame Index")
 
-        # video_output = gr.Video(label="Video")
         keyframe_slider = gr.Slider(label="Keyframes", minimum=0, maximum=0, step=1)
         image_progress = gr.Image(label="Progress distribution", type="numpy")
         with gr.Row():
             image_reference = gr.Image(label="Reference Frame", type="numpy")
             image_output = gr.Image(label="Selected Keyframe", type="numpy")
 
-        prev_button = gr.Button("Previous")
-        next_button = gr.Button("Next")
+        video_output = gr.Video(label="Reference Frame Video")
+
+        log_out_text = gr.Textbox(label="Log", lines=40)
 
         def update_keyframe_slider(selected_index):
             sub_subfolder, metadata = processed_metadata[selected_index]
@@ -105,6 +117,26 @@ def gradio_app(root_folder: str):
             end_frame_idx = metadata.get("end_frame_idx", -1)
             return video_path, channel, art_media, numb_frames, start_frame_idx, end_frame_idx
 
+        def update_video(selected_index) -> Optional[str]:
+            sub_subfolder, metadata = processed_metadata[selected_index]
+            extracted_frames = metadata.get("extracted_frames", [])
+            return save_video_from_frames(
+                video_dir=sub_subfolder, frame_path_list=extracted_frames, video_output_path=tmp_video_path
+            )
+
+        def get_logs(selected_index) -> str:
+            """Function to dynamically generate the tabs based on the current log_files"""
+            if selected_index < 0:
+                return "No Log file found"
+            ret = "??"
+            sub_subfolder, _ = processed_metadata[selected_index]
+            logfile_list = load_log_files(sub_subfolder)
+            for tab_name, file_path in logfile_list:
+                log_content = read_file(file_path)
+                ret += tab_name + ":\n" + log_content + "\n\n"
+
+            return ret
+
         prev_button.click(lambda x: max(0, x - 1), inputs=selected_index, outputs=selected_index)
         next_button.click(
             lambda x: min(len(processed_metadata) - 1, x + 1), inputs=selected_index, outputs=selected_index
@@ -127,7 +159,10 @@ def gradio_app(root_folder: str):
                 end_frame_idx_text,
             ],
         )
+        selected_index.change(update_video, inputs=selected_index, outputs=[video_output])
+        selected_index.change(get_logs, inputs=selected_index, outputs=[log_out_text])
 
         keyframe_slider.change(update_image_output, inputs=[selected_index, keyframe_slider], outputs=image_output)
+        demo.unload(fn=lambda: cleanup(tmp_video_path))
 
     demo.launch(server_name="0.0.0.0", server_port=7860)
