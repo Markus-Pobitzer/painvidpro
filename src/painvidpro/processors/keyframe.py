@@ -69,6 +69,7 @@ class ProcessorKeyframe(ProcessorBase):
 
     def set_default_parameters(self):
         self.params = {
+            "yt_video_format": "bestvideo[height<=360]",
             "sequence_detection_algorithm": "SequenceDetectionGroundingDino",
             "sequence_detection_config": {},
             "keyframe_detection_algorithm": "KeyframeDetectionFrameDiff",
@@ -94,7 +95,8 @@ class ProcessorKeyframe(ProcessorBase):
                 # TODO: Check which site it is from needs to be done dynamically
                 if "youtube" in video_file_path:
                     url = metadata["id"]
-                download_video(url, video_file_path)
+                video_format = self.params.get("yt_video_format", "bestvideo[height<=360]")
+                download_video(url, video_file_path, format=video_format)
         except Exception as e:
             self.logger.info(f" Failed downloading {video_file_path}: {e}")
             return False

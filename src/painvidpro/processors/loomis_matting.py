@@ -21,6 +21,11 @@ class ProcessorLoomisMatting(ProcessorMatting):
         self.video_portrait_name = "video_left.mp4"
         self.video_painting_name = "video_right.mp4"
 
+    def set_default_parameters(self):
+        super().set_default_parameters()
+        # Overwriting youtube video format
+        self.params["yt_video_format"] = "bestvideo[height<=480]"
+
     def extract_reference_frame(self, video_file_path: str, reference_frame_path: str) -> bool:
         """Extract the reference frame from a video and save it.
 

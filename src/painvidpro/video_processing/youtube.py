@@ -13,14 +13,15 @@ def _extract_meta(result: Dict[str, Any], key_list: List[str], default: Any = ""
     return ret
 
 
-def download_video(url: str, output_path: str):
+def download_video(url: str, output_path: str, format: str = "bestvideo[height<=360]"):
     """Downloads a YouTube video.
 
     Args:
         url: The YouTube URL.
         output_path: The output path on disk.
+        format: The ydl video format.
     """
-    ydl_opts = {"format": "bestvideo[height<=360]", "outtmpl": output_path}
+    ydl_opts = {"format": format, "outtmpl": output_path}
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
 
