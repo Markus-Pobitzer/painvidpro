@@ -2,10 +2,10 @@
 
 import json
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Union
 
 
-def load_metadata(video_dir: Path, metadata_name: str = "metadata.json") -> Tuple[bool, Dict]:
+def load_metadata(video_dir: Union[Path, str], metadata_name: str = "metadata.json") -> Tuple[bool, Dict]:
     """Loads the metadata from disk.
 
     Args:
@@ -16,7 +16,7 @@ def load_metadata(video_dir: Path, metadata_name: str = "metadata.json") -> Tupl
         A bool if it was successfull and the metadata. If the success bool is
         false, an empty dict will be returned.
     """
-    metadata_path = video_dir / metadata_name
+    metadata_path = Path(video_dir) / metadata_name
     if metadata_path.exists():
         with open(metadata_path, "r") as f:
             return True, json.load(f)
