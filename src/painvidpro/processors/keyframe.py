@@ -206,6 +206,11 @@ class ProcessorKeyframe(ProcessorBase):
             metadata["keyframe_list"] = keyframe_list
             metadata["selected_keyframe_list"] = filtered_keyframe_list
             save_metadata(video_dir=video_dir, metadata=metadata, metadata_name=self.metadata_name)
+            try:
+                if verify_keyframes:
+                    self.keyframe_verifier.model.to("cpu")  # type: ignore
+            except Exception as e:
+                self.logger.info(f"Failed to offload the keyframe verifier model: {e}")
         except Exception as e:
             self.logger.info(f" Failed detecting keyframes for {video_file_path}: {e}")
             return False
