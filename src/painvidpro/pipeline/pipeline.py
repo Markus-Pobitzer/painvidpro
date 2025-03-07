@@ -118,7 +118,7 @@ class Pipeline:
         self.save()
         return ret
 
-    def process_video(self, video_data: Dict[str, Any], batch_size: int = 1):
+    def process_video(self, video_data: Dict[str, Any], batch_size: int = -1):
         """Applies the processor onto a video item."""
         source = video_data["source"]
         if source == "youtube":
@@ -129,7 +129,30 @@ class Pipeline:
         else:
             self.logger.info(f"Processing for source {source} is not supported. In Video data {video_data}.")
 
-    def process(self, batch_size: int = 1):
+    def process_video_by_id(self, source: str, video_id: str, batch_size: int = -1) -> None:
+        """Process a single video identified by its source and video ID.
+
+        Retrieves the video data from the pipeline's state and applies the configured processors.
+        If the specified source or video ID does not exist, logs an informational message and exits.
+
+        Args:
+            source: The source platform of the video (e.g., "youtube").
+            video_id: The unique identifier of the video within the source platform.
+            batch_size: Number of batches to use during processing..
+
+        Returns:
+            None
+        """
+        if source not in self.video_item_dict:
+            self.logger.info(f"Source '{source}' not found in pipeline. Skipping processing.")
+            return
+        if video_id not in self.video_item_dict[source]:
+            self.logger.info(f"Video ID '{video_id}' not found in source '{source}'. Skipping processing.")
+            return
+        video_data = self.video_item_dict[source][video_id]
+        self.process_video(video_data=video_data, batch_size=batch_size)
+
+    def process(self, batch_size: int = -1):
         """Processes all video entries in the Pipeline that have not been processed yet."""
         for source in self.video_item_dict.keys():
             for video_id in tqdm(self.video_item_dict[source].keys(), desc="Processing video"):

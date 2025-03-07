@@ -176,16 +176,16 @@ class ProcessorLoomisMatting(ProcessorMatting):
             save_metadata(video_dir=video_dir, metadata=metadata, metadata_name=self.metadata_name)
             ret[i] = True
 
+            # Offloading to cpu
+            try:
+                self.rmbg_model.model.to("cpu")  # type: ignore
+            except Exception as e:
+                self.logger.info(f"Was not able to offload the RMBG model: {e}")
+
         # Clear file logging
         logging.basicConfig(
             filename=None,
             force=True,
         )
-
-        # Offloading to cpu
-        try:
-            self.rmbg_model.model.to("cpu")  # type: ignore
-        except Exception as e:
-            self.logger.info(f"Was not able to offload the RMBG model: {e}")
 
         return ret
