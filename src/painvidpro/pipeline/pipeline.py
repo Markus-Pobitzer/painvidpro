@@ -93,7 +93,7 @@ class Pipeline:
         """Processes a video input file and updates the video item dictionary.
 
         Args:
-            video_input_file: The path to the file containing video item details in JSON format.
+            video_input_file: The path to the file containing video item details in JSONL format.
 
         Returns:
             A list of strings with the paths to the processed video directories.
