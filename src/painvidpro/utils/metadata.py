@@ -18,8 +18,11 @@ def load_metadata(video_dir: Union[Path, str], metadata_name: str = "metadata.js
     """
     metadata_path = Path(video_dir) / metadata_name
     if metadata_path.exists():
-        with open(metadata_path, "r") as f:
-            return True, json.load(f)
+        try:
+            with open(metadata_path, "r") as f:
+                return True, json.load(f)
+        except Exception:
+            return False, {}
     return False, {}
 
 
