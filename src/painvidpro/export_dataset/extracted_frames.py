@@ -37,6 +37,11 @@ def perpare_data(
     start_frame = metadata.get("start_frame_idx", -1)
     end_frame = metadata.get("end_frame_idx", -1)
     extracted_frames = metadata.get("extracted_frames", [])
+    exclude_video = metadata.get("exclude_video", False)
+
+    if exclude_video:
+        logger.info((f"Excluding {video_dir}, since the exclude_video is set in the metadata."))
+        return False, {}
 
     # Only take samples that have been successfully processed with the Keyframe Processor
     if start_frame < 0 or end_frame < 0 or len(extracted_frames) == 0:
@@ -141,7 +146,7 @@ def save_frames_to_disk(data_list: List[Dict[str, Any]], output_path: str, split
     logger.info(f"{split} Split contains {len(extracted_frame_list)} frames.")
 
 
-def export(pipeline_path: str, output_path: str, zip_output: int = 0, train_split_size: float = 0.7) -> bool:
+def export(pipeline_path: str, output_path: str, zip_output: int = 0, train_split_size: float = 0.75) -> bool:
     """Exports the data stored in a pipeline.
 
     Args:
