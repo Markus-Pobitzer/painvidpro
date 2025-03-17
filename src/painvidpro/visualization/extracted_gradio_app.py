@@ -1,11 +1,13 @@
 """Visualization extracted frames."""
 
 import os
+from pathlib import Path
 from typing import Optional
 
 import gradio as gr
 import numpy as np
 
+from painvidpro.utils.metadata import load_metadata, save_metadata
 from painvidpro.visualization.utils import (
     cleanup,
     compute_progress_dist,
@@ -36,6 +38,7 @@ def gradio_app(root_folder: str):
 
     def update_display(selected_index):
         sub_subfolder, metadata = processed_metadata[selected_index]
+        exclude_video = metadata.get("exclude_video", False)
         reference_frame_name = metadata.get("reference_frame_name", "reference_frame.png")
         reference_frame_path = os.path.join(sub_subfolder, reference_frame_name)
         keyframes = metadata.get("selected_keyframe_list", [])
@@ -54,15 +57,15 @@ def gradio_app(root_folder: str):
         reference_frame = get_reference_frame(reference_frame_path, "", keyframes)
 
         # return video_path, ret_keyframe
-        return reference_frame, ret_keyframe, prog_dist_img
+        return exclude_video, reference_frame, ret_keyframe, prog_dist_img
 
     with gr.Blocks() as demo:
         gr.Markdown("## Video and Keyframe Viewer")
 
         pipe_panel = gr.Accordion("Pipeline Information", open=False)
         with pipe_panel:
-            root_folder_text = gr.Textbox(label="Root folder", value=root_folder)  # noqa: F841
-            numb_videos_text = gr.Textbox(label="Number of videos", value=numb_video)  # noqa: F841
+            gr.Textbox(label="Root folder", value=root_folder)  # noqa: F841
+            gr.Textbox(label="Number of videos", value=numb_video)  # noqa: F841
 
         selected_index = gr.Number(label="Select Index", value=0)
 
@@ -79,6 +82,9 @@ def gradio_app(root_folder: str):
             start_frame_idx_text = gr.Textbox(label="Start Frame Index")
             end_frame_idx_text = gr.Textbox(label="End Frame Index")
 
+        with gr.Row():
+            exclude_video_checkbox = gr.Checkbox(label="Exclude Video")
+
         keyframe_slider = gr.Slider(label="Keyframes", minimum=0, maximum=0, step=1)
         image_progress = gr.Image(label="Progress distribution", type="numpy")
         with gr.Row():
@@ -87,6 +93,20 @@ def gradio_app(root_folder: str):
             image_output = gr.Image(label="Selected Keyframe", type="numpy", height=512)
 
         log_out_text = gr.Textbox(label="Log", lines=40)
+
+        def update_exclude_video(selected_index, checkbox_value):
+            """Handles the exclude video checkobox."""
+            sub_subfolder, _ = processed_metadata[selected_index]
+            # Load the metadata just in case changes happened in the meantime
+            succ, metadata = load_metadata(Path(sub_subfolder))
+            if not succ:
+                raise gr.Error(f"Was not able to load metadata from {sub_subfolder}.")
+            metadata["exclude_video"] = checkbox_value
+            try:
+                save_metadata(Path(sub_subfolder), metadata=metadata)
+            except Exception as e:
+                raise gr.Error(f"Was not able to save metadata in folder {sub_subfolder}: {e}")
+            processed_metadata[selected_index] = (sub_subfolder, metadata)
 
         def update_keyframe_slider(selected_index):
             _, metadata = processed_metadata[selected_index]
@@ -140,9 +160,13 @@ def gradio_app(root_folder: str):
             lambda x: min(len(processed_metadata) - 1, x + 1), inputs=selected_index, outputs=selected_index
         )
 
+        exclude_video_checkbox.change(update_exclude_video, inputs=[selected_index, exclude_video_checkbox])
+
         # selected_index.change(update_display, inputs=selected_index, outputs=[video_output, image_output])
         selected_index.change(
-            update_display, inputs=selected_index, outputs=[image_reference, image_output, image_progress]
+            update_display,
+            inputs=selected_index,
+            outputs=[exclude_video_checkbox, image_reference, image_output, image_progress],
         )
         selected_index.change(update_keyframe_slider, inputs=selected_index, outputs=[keyframe_slider])
         selected_index.change(
