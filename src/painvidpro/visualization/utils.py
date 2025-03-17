@@ -113,6 +113,27 @@ def load_video_and_keyframes(
     return video_path, keyframes
 
 
+def display_keyframes_from_disk(
+    sub_subfolder: str, keyframes: List[int], keyframe_dir: str = "keyframes"
+) -> List[np.ndarray]:
+    """Function to display keyframes in RGB space."""
+    frames = []
+    keyframe_path = join(sub_subfolder, keyframe_dir)
+    keyframe_img_list = [
+        join(keyframe_path, f) for f in listdir(keyframe_path) if isfile(join(keyframe_path, f)) and f.endswith(".png")
+    ]
+    for fp in keyframe_img_list:
+        # Get the keyframe index from file path
+        ki = int(fp[-8 : -len(".png")])
+        if ki not in keyframes:
+            print(f"Keyframe {fp} with index {ki} not in selected keyfrmes: {keyframes}")
+            continue
+        keyframe_img = cv2.imread(fp)
+        frame_rgb = cv2.cvtColor(keyframe_img, cv2.COLOR_BGR2RGB)
+        frames.append(frame_rgb)
+    return frames
+
+
 def display_keyframes(video_path: str, keyframes: List[int]) -> List[np.ndarray]:
     """Function to display keyframes in RGB space."""
     cap = cv2.VideoCapture(video_path)
@@ -140,11 +161,31 @@ def get_frame(video_path: str, frame_idx: int) -> np.ndarray:
     return cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
 
+def get_keyframe(sub_subfolder: str, keyframe_idx: int, keyframe_dir: str = "keyframes") -> np.ndarray:
+    """Function to load one keyframe in RGB space."""
+    keyframe_path = join(sub_subfolder, keyframe_dir)
+    keyframe_img_list = [
+        join(keyframe_path, f) for f in listdir(keyframe_path) if isfile(join(keyframe_path, f)) and f.endswith(".png")
+    ]
+    print(keyframe_idx)
+    for fp in keyframe_img_list:
+        # Get the keyframe index from file path
+        ki = int(fp[-8 : -len(".png")])
+        print(fp[-8 : -len(".png")], ki)
+        if ki == keyframe_idx:
+            keyframe_img = cv2.imread(fp)
+            frame_rgb = cv2.cvtColor(keyframe_img, cv2.COLOR_BGR2RGB)
+            return frame_rgb
+    raise ValueError(f"Was not able to extract Keyframe with index {keyframe_idx} from {keyframe_path}.")
+
+
 def compute_progress_dist(metadata: Dict[str, Any], number_bins: int = 100) -> List[int]:
     """Each Video from start frame to last keaframe gets ordered in to bins."""
-    start_frame_idx = metadata["start_frame_idx"]
-    last_keyframe_idx = metadata["selected_keyframe_list"][-1] - start_frame_idx
     progress_bin_list = [0] * number_bins
+    start_frame_idx = metadata["start_frame_idx"]
+    if len(metadata.get("selected_keyframe_list", [])) == 0:
+        return progress_bin_list
+    last_keyframe_idx = metadata["selected_keyframe_list"][-1] - start_frame_idx
     for sele_keyframe in metadata["selected_keyframe_list"][:-1]:
         progress = (sele_keyframe - start_frame_idx) / last_keyframe_idx
         prog_bin = int(progress * number_bins)

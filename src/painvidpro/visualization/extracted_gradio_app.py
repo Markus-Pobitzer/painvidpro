@@ -11,13 +11,12 @@ from painvidpro.visualization.utils import (
     compute_progress_dist,
     create_temp_file,
     filter_processed_metadata_extracted_frames,
-    get_frame,
+    get_keyframe,
     get_reference_frame,
     get_video_folders,
     get_video_path,
     load_log_files,
     load_pipeline,
-    load_video_and_keyframes,
     read_file,
     save_video_from_frames,
     vis_progress_distribution,
@@ -37,22 +36,22 @@ def gradio_app(root_folder: str):
 
     def update_display(selected_index):
         sub_subfolder, metadata = processed_metadata[selected_index]
-        video_name = metadata.get("processed_video_name", "video.mp4")
         reference_frame_name = metadata.get("reference_frame_name", "reference_frame.png")
         reference_frame_path = os.path.join(sub_subfolder, reference_frame_name)
-        video_path, keyframes = load_video_and_keyframes(sub_subfolder, metadata, video_name=video_name)
+        keyframes = metadata.get("selected_keyframe_list", [])
         if len(keyframes) > 0:
             try:
-                ret_keyframe = get_frame(video_path, keyframes[0])
+                ret_keyframe = get_keyframe(sub_subfolder, keyframes[0])
             except Exception as _:
-                ret_keyframe = np.zeros((250, 250, 3)) + (255, 0, 0)
+                ret_keyframe = np.zeros((512, 512, 3)) + (255, 56, 56)
+                ret_keyframe = ret_keyframe.astype(np.uint8)
         else:
-            ret_keyframe = np.zeros((250, 250, 3))
+            ret_keyframe = np.zeros((512, 512, 3)).astype(np.uint8) + 255
 
         # To show how well distributed the keyframes are
         progress_bin_list = compute_progress_dist(metadata)
         prog_dist_img = vis_progress_distribution(progress_bin_list)
-        reference_frame = get_reference_frame(reference_frame_path, video_path, keyframes)
+        reference_frame = get_reference_frame(reference_frame_path, "", keyframes)
 
         # return video_path, ret_keyframe
         return reference_frame, ret_keyframe, prog_dist_img
@@ -83,27 +82,26 @@ def gradio_app(root_folder: str):
         keyframe_slider = gr.Slider(label="Keyframes", minimum=0, maximum=0, step=1)
         image_progress = gr.Image(label="Progress distribution", type="numpy")
         with gr.Row():
-            image_reference = gr.Image(label="Reference Frame", type="numpy")
-            image_output = gr.Image(label="Selected Keyframe", type="numpy")
-
-        video_output = gr.Video(label="Reference Frame Video")
+            image_reference = gr.Image(label="Reference Frame", type="numpy", height=512)
+            video_output = gr.Video(label="Extracted Frame Video", height=512)
+            image_output = gr.Image(label="Selected Keyframe", type="numpy", height=512)
 
         log_out_text = gr.Textbox(label="Log", lines=40)
 
         def update_keyframe_slider(selected_index):
-            sub_subfolder, metadata = processed_metadata[selected_index]
-            video_name = metadata.get("processed_video_name", "video.mp4")
-            _, keyframes = load_video_and_keyframes(sub_subfolder, metadata, video_name=video_name)
+            _, metadata = processed_metadata[selected_index]
+            keyframes = metadata.get("selected_keyframe_list", [])
             return gr.update(maximum=len(keyframes) - 1, value=0)
 
         def update_image_output(selected_index, keyframe_index):
             sub_subfolder, metadata = processed_metadata[selected_index]
-            video_name = metadata.get("processed_video_name", "video.mp4")
-            video_path, keyframes = load_video_and_keyframes(sub_subfolder, metadata, video_name=video_name)
+            keyframes = metadata.get("selected_keyframe_list", [])
             try:
-                ret_keyframe = get_frame(video_path, keyframes[keyframe_index])
-            except Exception as _:
-                ret_keyframe = np.zeros((250, 250, 3)) + (255, 0, 0)
+                ret_keyframe = get_keyframe(sub_subfolder, keyframes[keyframe_index])
+            except Exception as e:
+                raise gr.Error(e)
+                # ret_keyframe = np.zeros((512, 512, 3)) + (255, 56, 56)
+                # ret_keyframe = ret_keyframe.astype(np.uint8)
             return ret_keyframe
 
         def update_info_panel(selected_index):
@@ -128,7 +126,7 @@ def gradio_app(root_folder: str):
             """Function to dynamically generate the tabs based on the current log_files"""
             if selected_index < 0:
                 return "No Log file found"
-            ret = "??"
+            ret = ""
             sub_subfolder, _ = processed_metadata[selected_index]
             logfile_list = load_log_files(sub_subfolder)
             for tab_name, file_path in logfile_list:
