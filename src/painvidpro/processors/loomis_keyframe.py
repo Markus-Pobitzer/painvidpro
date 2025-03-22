@@ -20,6 +20,23 @@ class ProcessorLoomisKeyframe(ProcessorKeyframe):
         self.video_portrait_name = "video_left.mp4"
         self.video_painting_name = "video_right.mp4"
 
+    def _post_process_loomis(self, video_file_path: str, video_left: str, video_right: str) -> bool:
+        """Does post processing.
+
+        Includes deletion of files if specified.
+
+        Args:
+            video_file_path: Path to the video on disk.
+
+        Returns:
+            A bool indicating success.
+        """
+        if self.params.get("remove_videos_after_processing"):
+            self._delete_video(video_file_path=video_file_path)
+            self._delete_video(video_file_path=video_left)
+            self._delete_video(video_file_path=video_right)
+        return True
+
     def process(self, video_dir_list: List[str], batch_size: int = -1) -> List[bool]:
         """Extracts the Keyframes of a Loomis Portrait video.
 
@@ -104,6 +121,12 @@ class ProcessorLoomisKeyframe(ProcessorKeyframe):
 
             # Detecting and extracting the keyframes
             if not self._detect_keyframes(video_dir=video_dir, video_file_path=video_right, metadata=metadata):
+                continue
+
+            # Post processing and cleaning up
+            if not self._post_process_loomis(
+                video_file_path=video_file_path, video_left=video_left, video_right=video_right
+            ):
                 continue
 
             # Processing was successfull

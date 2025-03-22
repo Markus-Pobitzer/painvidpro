@@ -78,6 +78,7 @@ class ProcessorKeyframe(ProcessorBase):
             "keyframe_verification_algorithm": "ObjectDetectionGroundingDino",
             "keyframe_verification_config": {},
             "disable_tqdm": True,
+            "remove_videos_after_processing": False,
         }
 
     def _download_video(self, video_file_path: str, metadata: Dict[str, Any]) -> bool:
@@ -101,6 +102,16 @@ class ProcessorKeyframe(ProcessorBase):
             self.logger.info(f" Failed downloading {video_file_path}: {e}")
             return False
         return True
+
+    def _delete_video(self, video_file_path: str):
+        """Deletes the video specifid at video_file_path.
+
+        If no file was found at the specified path, nothing is done.
+        Args:
+            video_file_path: The path to the video to delte.
+        """
+        if os.path.isfile(video_file_path):
+            os.remove(video_file_path)
 
     def _detect_start_end_frame(
         self, video_dir: Path, video_file_path: str, metadata: Dict[str, Any], batch_size: int = -1
@@ -216,6 +227,21 @@ class ProcessorKeyframe(ProcessorBase):
             return False
         return True
 
+    def _post_process(self, video_file_path: str) -> bool:
+        """Does post processing.
+
+        Includes deletion of files if specified.
+
+        Args:
+            video_file_path: Path to the video on disk.
+
+        Returns:
+            A bool indicating success.
+        """
+        if self.params.get("remove_videos_after_processing"):
+            self._delete_video(video_file_path=video_file_path)
+        return True
+
     def process(self, video_dir_list: List[str], batch_size: int = -1) -> List[bool]:
         """Extracts the Keyframes of the videos.
 
@@ -257,9 +283,14 @@ class ProcessorKeyframe(ProcessorBase):
             if not self._detect_keyframes(video_dir=video_dir, video_file_path=video_file_path, metadata=metadata):
                 continue
 
+            # Post processing and cleaning up
+            if not self._post_process(video_file_path=video_file_path):
+                continue
+
             # Processing was successfull
             metadata["processed_video_name"] = self.video_file_name
             metadata["processed"] = True
             save_metadata(video_dir=video_dir, metadata=metadata, metadata_name=self.metadata_name)
+
             ret[i] = True
         return ret

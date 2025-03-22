@@ -409,6 +409,10 @@ class ProcessorMatting(ProcessorKeyframe):
             if not self.save_reference_frame(metadata=metadata, reference_frame_path=reference_frame_path):
                 continue
 
+            # Post processing and cleaning up
+            if not self._post_process(video_file_path=video_file_path):
+                continue
+
             # Processing was successfull
             metadata["processed_video_name"] = self.video_file_name
             metadata["processed"] = True

@@ -95,6 +95,23 @@ class ProcessorLoomisMatting(ProcessorMatting):
             return False
         return True
 
+    def _post_process_loomis(self, video_file_path: str, video_left: str, video_right: str) -> bool:
+        """Does post processing.
+
+        Includes deletion of files if specified.
+
+        Args:
+            video_file_path: Path to the video on disk.
+
+        Returns:
+            A bool indicating success.
+        """
+        if self.params.get("remove_videos_after_processing"):
+            self._delete_video(video_file_path=video_file_path)
+            self._delete_video(video_file_path=video_left)
+            self._delete_video(video_file_path=video_right)
+        return True
+
     def process(self, video_dir_list: List[str], batch_size: int = -1) -> List[bool]:
         """Extracts the Keyframes of a Loomis Portrait video.
 
@@ -167,6 +184,12 @@ class ProcessorLoomisMatting(ProcessorMatting):
                 num_bins=num_bins,
                 num_samples_per_bin=num_samples_per_bin,
                 disable_tqdm=disable_tqdm,
+            ):
+                continue
+
+            # Post processing and cleaning up
+            if not self._post_process_loomis(
+                video_file_path=video_file_path, video_left=video_left, video_right=video_right
             ):
                 continue
 
