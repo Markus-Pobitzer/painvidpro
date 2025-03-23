@@ -300,10 +300,11 @@ class ProcessorMatting(ProcessorKeyframe):
         self.logger.info(f"Successfully extracted {len(median_frame_paths)} median frames.")
         return True
 
-    def save_reference_frame(self, metadata: Dict[str, Any], reference_frame_path: str) -> bool:
+    def save_reference_frame(self, video_dir: Path, metadata: Dict[str, Any], reference_frame_path: str) -> bool:
         """Saves the last extracted frame as reference frame.
 
         Args:
+            video_dir: Path to the directory containing the video.
             metadata: The metadata.
             reference_frame_path: The path to the reference frame.
 
@@ -329,11 +330,14 @@ class ProcessorMatting(ProcessorKeyframe):
             return False
 
         try:
-            cv2.imwrite(reference_frame_path, cv2.imread(selected_frame["path"]))
+            selected_frame_path = str(video_dir / selected_frame["path"])
+            cv2.imwrite(reference_frame_path, cv2.imread(selected_frame_path))
         except Exception as e:
             self.logger.info(
                 (
-                    f"Tried to save reference frame but was not able to load image from {selected_frame.get('path', "no path was found")}."
+                    f"Tried to save reference frame to {reference_frame_path}"
+                    f" but was not able to load image from video dir {video_dir}"
+                    f" with relative path {selected_frame.get('path', "no path was found")}."
                     f"\n{e}"
                 )
             )
@@ -406,7 +410,9 @@ class ProcessorMatting(ProcessorKeyframe):
                 continue
 
             # Save the reference frame
-            if not self.save_reference_frame(metadata=metadata, reference_frame_path=reference_frame_path):
+            if not self.save_reference_frame(
+                video_dir=video_dir, metadata=metadata, reference_frame_path=reference_frame_path
+            ):
                 continue
 
             # Post processing and cleaning up
