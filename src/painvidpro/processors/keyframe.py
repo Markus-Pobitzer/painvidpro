@@ -96,10 +96,28 @@ class ProcessorKeyframe(ProcessorBase):
                 # TODO: Check which site it is from needs to be done dynamically
                 if "youtube" in video_file_path:
                     url = metadata["id"]
-                video_format = self.params.get("yt_video_format", "bestvideo[height<=360]")
-                download_video(url, video_file_path, format=video_format)
+                    video_format = self.params.get("yt_video_format", "bestvideo[height<=360]")
+                    try:
+                        download_video(url, video_file_path, format=video_format)
+                    except Exception as e:
+                        self.logger.info(
+                            (
+                                f" Failed downloading YouTube video with video Id {url}"
+                                f" and video format {video_format} to {video_file_path}:\n"
+                                f"{e}\n"
+                            )
+                        )
+                        return False
+                else:
+                    self.logger.info(
+                        (
+                            f" Was not able to determine how to download video to {video_file_path}.\n"
+                            f"The metadata: {metadata}."
+                        )
+                    )
+                    return False
         except Exception as e:
-            self.logger.info(f" Failed downloading {video_file_path}: {e}")
+            self.logger.info(f" Failed downloading video to {video_file_path}: {e}")
             return False
         return True
 
