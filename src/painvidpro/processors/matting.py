@@ -46,6 +46,7 @@ class ProcessorMatting(ProcessorKeyframe):
         self.params["occlusion_masking_config"] = {}
         self.params["num_bins"] = -1
         self.params["num_samples_per_bin"] = -1
+        self.params["detect_keyframes"] = True
 
     def _get_frame_indices(
         self,
@@ -367,6 +368,7 @@ class ProcessorMatting(ProcessorKeyframe):
         disable_tqdm = self.params.get("disable_tqdm", True)
         num_bins = self.params.get("num_bins", -1)
         num_samples_per_bin = self.params.get("num_samples_per_bin", -1)
+        detect_keyframes = self.params.get("detect_keyframes", True)
         for i, vd in enumerate(video_dir_list):
             video_dir = Path(vd)
             log_file = str(video_dir / "ProcessorMatting.log")
@@ -395,7 +397,9 @@ class ProcessorMatting(ProcessorKeyframe):
                 continue
 
             # Detecting and extracting the keyframes
-            if not self._detect_keyframes(video_dir=video_dir, video_file_path=video_file_path, metadata=metadata):
+            if detect_keyframes and not self._detect_keyframes(
+                video_dir=video_dir, video_file_path=video_file_path, metadata=metadata
+            ):
                 continue
 
             # Extracting frames by computing the median of sampled frames
