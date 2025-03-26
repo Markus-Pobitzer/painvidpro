@@ -4,7 +4,9 @@ from typing import Any, Dict
 
 from painvidpro.occlusion_masking.accumulate_diff import OcclusionMaskingAccumulateDiff
 from painvidpro.occlusion_masking.base import OcclusionMaskingBase
+from painvidpro.occlusion_masking.dav2 import OcclusionMaskingDAV2
 from painvidpro.occlusion_masking.frame_diff import OcclusionMaskingFrameDiff
+from painvidpro.occlusion_masking.inspyrenet import OcclusionMaskingInSPyReNet
 from painvidpro.occlusion_masking.rmbg import OcclusionMaskingRMBG
 
 
@@ -31,6 +33,10 @@ class OcclusionMaskingFactory:
             instance = OcclusionMaskingAccumulateDiff()
         elif algorithm == "OcclusionMaskingRMBG":
             instance = OcclusionMaskingRMBG()
+        elif algorithm == "OcclusionMaskingDAV2":
+            instance = OcclusionMaskingDAV2()
+        elif algorithm == "OcclusionMaskingInSPyReNet":
+            instance = OcclusionMaskingInSPyReNet()
         else:
             raise ValueError(f"Unknown algorithm: {algorithm}")
 
