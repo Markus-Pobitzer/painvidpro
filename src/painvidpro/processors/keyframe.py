@@ -3,7 +3,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -31,15 +31,48 @@ class ProcessorKeyframe(ProcessorBase):
             format="%(asctime)s,%(msecs)03d %(name)s %(levelname)s %(message)s",
             datefmt="%d-%m-%Y %H:%M:%S",
         )
-        self.sequence_detector: SequenceDetectionBase
-        self.keyframe_detector: KeyframeDetectionBase
-        self.keyframe_verifier: ObjectDetectionBase
+        self._sequence_detector: Optional[SequenceDetectionBase] = None
+        self._keyframe_detector: Optional[KeyframeDetectionBase] = None
+        self._keyframe_verifier: Optional[ObjectDetectionBase] = None
         self.video_file_name = "video.mp4"
         self.metadata_name = "metadata.json"
         self.keyframe_folder_name = "keyframes"
         self.reference_frame_name = "reference_frame.png"
         self.extr_folder_name = "extracted_frames"
         self.zfill_num = 8
+
+    @property
+    def sequence_detector(self) -> SequenceDetectionBase:
+        if self._sequence_detector is None:
+            raise RuntimeError(
+                (
+                    "Sequence Detector not correctly instanciated. Make sure to call "
+                    "set_parameters to laod the model and processor."
+                )
+            )
+        return self._sequence_detector
+
+    @property
+    def keyframe_detector(self) -> KeyframeDetectionBase:
+        if self._keyframe_detector is None:
+            raise RuntimeError(
+                (
+                    "Keyframe Detector not correctly instanciated. Make sure to call "
+                    "set_parameters to laod the model and processor."
+                )
+            )
+        return self._keyframe_detector
+
+    @property
+    def keyframe_verifier(self) -> ObjectDetectionBase:
+        if self._keyframe_verifier is None:
+            raise RuntimeError(
+                (
+                    "Keyframe Verifier not correctly instanciated. Make sure to call "
+                    "set_parameters to laod the model and processor."
+                )
+            )
+        return self._keyframe_verifier
 
     def set_parameters(self, params: Dict[str, Any]) -> Tuple[bool, str]:
         """Sets the parameters.
@@ -53,14 +86,14 @@ class ProcessorKeyframe(ProcessorBase):
         """
         self.params.update(params)
         try:
-            self.sequence_detector = SequenceDetectionFactory().build(
+            self._sequence_detector = SequenceDetectionFactory().build(
                 self.params["sequence_detection_algorithm"], self.params["sequence_detection_config"]
             )
-            self.keyframe_detector = KeyframeDetectionFactory().build(
+            self._keyframe_detector = KeyframeDetectionFactory().build(
                 self.params["keyframe_detection_algorithm"], self.params["keyframe_detection_config"]
             )
             if self.params.get("verify_keyframes", True):
-                self.keyframe_verifier = ObjectDetectionFactory().build(
+                self._keyframe_verifier = ObjectDetectionFactory().build(
                     self.params["keyframe_verification_algorithm"], self.params["keyframe_verification_config"]
                 )
         except ValueError as e:

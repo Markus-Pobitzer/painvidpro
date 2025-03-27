@@ -98,7 +98,7 @@ class OcclusionMaskingAccumulateDiff(OcclusionMaskingBase):
 
         return mask
 
-    def compute_mask_list(self, frame_list: List[np.ndarray]) -> List[np.ndarray]:
+    def compute_mask_list(self, frame_list: List[np.ndarray], offload_model: bool = True) -> List[np.ndarray]:
         """Occlusion masks based on the image difference.
 
         The image difference gets computed on the past_num_frames
@@ -106,6 +106,7 @@ class OcclusionMaskingAccumulateDiff(OcclusionMaskingBase):
 
         Args:
             frame_list: List of frames in cv2 image format.
+            offload_model: Gets ignored.
 
         Returns:
             List of masks, one for each input frame where an occlusion may exist.
