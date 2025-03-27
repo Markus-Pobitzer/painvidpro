@@ -1,6 +1,6 @@
 """Object detection with grounding dino."""
 
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -16,9 +16,31 @@ class ObjectDetectionGroundingDino(ObjectDetectionBase):
     def __init__(self):
         """Class to detect objects."""
         super().__init__()
-        self.processor = None
-        self.model = None
+        self._processor: Optional[Any] = None
+        self._model: Optional[Any] = None
         self.set_default_parameters()
+
+    @property
+    def processor(self) -> Any:
+        if self._processor is None:
+            raise RuntimeError(
+                (
+                    "Object Detection model not correctly instanciated. Make sure to call "
+                    "set_parameters to laod the model and processor."
+                )
+            )
+        return self._processor
+
+    @property
+    def model(self) -> Any:
+        if self._model is None:
+            raise RuntimeError(
+                (
+                    "Object Detection model not correctly instanciated. Make sure to call "
+                    "set_parameters to laod the model and processor."
+                )
+            )
+        return self._model
 
     def set_parameters(self, params: Dict[str, Any]) -> Tuple[bool, str]:
         """Sets the parameters.
@@ -33,8 +55,11 @@ class ObjectDetectionGroundingDino(ObjectDetectionBase):
         self.params.update(params)
 
         model_id = self.params["model_id"]
-        self.processor = AutoProcessor.from_pretrained(model_id)
-        self.model = AutoModelForZeroShotObjectDetection.from_pretrained(model_id)
+        try:
+            self._processor = AutoProcessor.from_pretrained(model_id)
+            self._model = AutoModelForZeroShotObjectDetection.from_pretrained(model_id)
+        except Exception as e:
+            return False, str(e)
         return True, ""
 
     def set_default_parameters(self):
@@ -50,8 +75,7 @@ class ObjectDetectionGroundingDino(ObjectDetectionBase):
 
     def offload_model(self):
         """Offloads the model to CPU, no effect if methdod has no model."""
-        if self.model is not None:
-            self.model.to("cpu")
+        self.model.to("cpu")
 
     def _object_detection(self, image_list: List[np.ndarray]) -> List[List[Dict[str, Any]]]:
         """Detects objects with Grounding Dino.
@@ -117,12 +141,6 @@ class ObjectDetectionGroundingDino(ObjectDetectionBase):
         device = self.params.get("device", "cuda")
         batch_size = self.params.get("batch_size", 1)
         disable_tqdm = self.params.get("disable_tqdm", True)
-
-        if self.model is None or self.processor is None:
-            raise ValueError(
-                "Model and Processor not correctly instanciated. Make sure to call set_parameters to laod the model and processor."
-            )
-
         self.model.to(device)
 
         ret: List[List[Dict[str, Any]]] = []
