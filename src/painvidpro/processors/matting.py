@@ -1,24 +1,50 @@
 """Class for the Loomis Keyframe detection."""
 
 import logging
+import os
 from os.path import isfile, join
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
 from tqdm import tqdm
 
-from painvidpro.occlusion_masking.factory import OcclusionMaskingFactory, OcclusionMaskingRMBG
+from painvidpro.object_detection.factory import ObjectDetectionBase, ObjectDetectionFactory
+from painvidpro.occlusion_masking.factory import OcclusionMaskingBase, OcclusionMaskingFactory
 from painvidpro.processors.keyframe import ProcessorKeyframe
 from painvidpro.utils.metadata import load_metadata, save_metadata
-from painvidpro.video_processing.utils import video_capture_context
+from painvidpro.video_processing.utils import video_capture_context, video_writer_context
 
 
 class ProcessorMatting(ProcessorKeyframe):
     def __init__(self):
         """Class to process videos."""
         super().__init__()
+        self._canvas_detector: Optional[ObjectDetectionBase] = None
+        self._rmbg_model: Optional[OcclusionMaskingBase] = None
+
+    @property
+    def canvas_detector(self) -> ObjectDetectionBase:
+        if self._canvas_detector is None:
+            raise RuntimeError(
+                (
+                    "Canvas Detector not correctly instanciated. Make sure to call "
+                    "set_parameters to laod the model and processor."
+                )
+            )
+        return self._canvas_detector
+
+    @property
+    def rmbg_model(self) -> OcclusionMaskingBase:
+        if self._rmbg_model is None:
+            raise RuntimeError(
+                (
+                    "Occlusion Masking model not correctly instanciated. Make sure to call "
+                    "set_parameters to laod the model and processor."
+                )
+            )
+        return self._rmbg_model
 
     def set_parameters(self, params: Dict[str, Any]) -> Tuple[bool, str]:
         """Sets the parameters.
@@ -35,18 +61,97 @@ class ProcessorMatting(ProcessorKeyframe):
             return ret, msg
         occlusion_masking_algorithm = self.params.get("occlusion_masking_algorithm", "OcclusionMaskingRMBG")
         occlusion_masking_config = self.params.get("occlusion_masking_config", {})
-        self.rmbg_model: OcclusionMaskingRMBG = OcclusionMaskingFactory().build(
-            occlusion_masking_algorithm, occlusion_masking_config
-        )  # type: ignore
+        detect_canvas = self.params.get("detect_canvas", False)
+        try:
+            if detect_canvas:
+                self._canvas_detector = ObjectDetectionFactory().build(
+                    self.params["canvas_detector_algorithm"], self.params["canvas_detector_config"]
+                )
+            self._rmbg_model = OcclusionMaskingFactory().build(occlusion_masking_algorithm, occlusion_masking_config)
+        except Exception as e:
+            return False, str(e)
         return True, ""
 
     def set_default_parameters(self):
         super().set_default_parameters()
+        self.params["detect_canvas"] = False
+        self.params["canvas_detector_algorithm"] = "ObjectDetectionGroundingDino"
+        self.params["canvas_detector_config"] = {"prompt": "a canvas."}
         self.params["occlusion_masking_algorithm"] = "OcclusionMaskingRMBG"
         self.params["occlusion_masking_config"] = {}
         self.params["num_bins"] = -1
         self.params["num_samples_per_bin"] = -1
         self.params["detect_keyframes"] = True
+
+    def detect_canvas(self, video_dir: Path, video_path: str, metadata: Dict[str, Any]) -> bool:
+        # In case we already detected the canvas
+        if metadata.get("canvas_detected", False):
+            return True
+        start_frame_idx = metadata["start_frame_idx"]
+
+        with video_capture_context(video_path=video_path) as cap:
+            frame_idx_to_consider = iter([start_frame_idx])
+            selected_frames: List[np.ndarray] = []
+
+            frame_idx = 0
+            frame_idx_to_select = next(frame_idx_to_consider, None)
+            ret, frame = cap.read()
+            while ret and frame_idx_to_select is not None:
+                if frame_idx_to_select == frame_idx:
+                    selected_frames.append(frame)
+                    frame_idx_to_select = next(frame_idx_to_consider, None)
+                ret, frame = cap.read()
+                frame_idx += 1
+
+            # Detect the objects
+            object_list: List[Any] = []
+            for entry in self.canvas_detector.detect_objects(selected_frames):
+                for det_obj in entry:
+                    object_list.append(det_obj)
+            object_list.sort(key=lambda x: x["score"], reverse=True)
+
+        if len(object_list) == 0:
+            self.logger.info("Was not able to detect a canvas in the video, using the original video for processing.")
+            return True
+
+        cavas_only_video_path = str(video_dir / "canvas_only_video.mp4")
+        with video_capture_context(video_path=video_path) as cap:
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            fps = cap.get(cv2.CAP_PROP_FPS)
+
+            # Take the box with highest score
+            x_min, y_min, x_max, y_max = object_list[0]["box"]
+
+            # Convert to integers (pixel indices)
+            x_min = max(0, int(round(x_min)))
+            y_min = max(0, int(round(y_min)))
+            x_max = min(width, int(round(x_max)))
+            y_max = min(height, int(round(y_max)))
+            new_width = x_max - x_min
+            new_height = y_max - y_min
+
+            with video_writer_context(
+                output_path=cavas_only_video_path, width=new_width, height=new_height, fps=fps
+            ) as vid_out:
+                ret, frame = cap.read()
+                while ret:
+                    # Crop the image
+                    cropped_image = frame[y_min:y_max, x_min:x_max]
+                    vid_out.write(cropped_image)
+                    ret, frame = cap.read()
+
+        # Overwrite the original video with the cropped one
+        os.replace(src=cavas_only_video_path, dst=video_path)
+        metadata["canvas_detected"] = True
+        save_metadata(video_dir=video_dir, metadata=metadata, metadata_name=self.metadata_name)
+        self.logger.info(
+            (
+                f"Detected Canvas with coordinates ({x_min}, {y_min}), ({x_max}, {y_max}).\n"
+                "The original video was overwritten with the cropped version."
+            )
+        )
+        return True
 
     def _get_frame_indices(
         self,
@@ -85,7 +190,7 @@ class ProcessorMatting(ProcessorKeyframe):
         frame_array: np.ndarray,
         prev_extr_frame: np.ndarray,
         keyframes: np.ndarray,
-        rmbg_model: OcclusionMaskingRMBG,
+        rmbg_model: OcclusionMaskingBase,
         kernel_size: int = 5,
     ) -> np.ndarray:
         """Extracts the median frame on the given inputs.
@@ -368,6 +473,7 @@ class ProcessorMatting(ProcessorKeyframe):
         disable_tqdm = self.params.get("disable_tqdm", True)
         num_bins = self.params.get("num_bins", -1)
         num_samples_per_bin = self.params.get("num_samples_per_bin", -1)
+        detect_canvas = self.params.get("detect_canvas", True)
         detect_keyframes = self.params.get("detect_keyframes", True)
         for i, vd in enumerate(video_dir_list):
             video_dir = Path(vd)
@@ -396,7 +502,13 @@ class ProcessorMatting(ProcessorKeyframe):
             ):
                 continue
 
-            # Detecting and extracting the keyframes
+            # Detect the canvas if specified
+            if detect_canvas and not self.detect_canvas(
+                video_dir=video_dir, video_path=video_file_path, metadata=metadata
+            ):
+                continue
+
+            # Detecting and extracting the keyframes if specified
             if detect_keyframes and not self._detect_keyframes(
                 video_dir=video_dir, video_file_path=video_file_path, metadata=metadata
             ):
