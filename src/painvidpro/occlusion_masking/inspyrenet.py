@@ -40,12 +40,18 @@ class OcclusionMaskingInSPyReNet(OcclusionMaskingBase):
         self.params.update(params)
 
         device = self.params["device"]
-        self._pipe = Remover(jit=False, device=device)
+        use_fast_model = self.params.get("use_fast_model", True)
+        try:
+            mode = "fast" if use_fast_model else "base"
+            self._pipe = Remover(mode=mode, jit=False, device=device)
+        except Exception as e:
+            return False, str(e)
         return True, ""
 
     def set_default_parameters(self):
         self.params = {
             "device": "cuda",
+            "use_fast_model": True,
             "convert_input_from_bgr_to_rgb": True,
             "threshold": 20,
         }
