@@ -59,7 +59,7 @@ class ProcessorMatting(ProcessorKeyframe):
         ret, msg = super().set_parameters(params)
         if not ret:
             return ret, msg
-        occlusion_masking_algorithm = self.params.get("occlusion_masking_algorithm", "OcclusionMaskingRMBG")
+        occlusion_masking_algorithm = self.params.get("occlusion_masking_algorithm", "OcclusionMaskingInSPyReNet")
         occlusion_masking_config = self.params.get("occlusion_masking_config", {})
         detect_canvas = self.params.get("detect_canvas", False)
         try:
@@ -77,11 +77,11 @@ class ProcessorMatting(ProcessorKeyframe):
         self.params["detect_canvas"] = False
         self.params["canvas_detector_algorithm"] = "ObjectDetectionGroundingDino"
         self.params["canvas_detector_config"] = {"prompt": "a canvas."}
-        self.params["occlusion_masking_algorithm"] = "OcclusionMaskingRMBG"
+        self.params["occlusion_masking_algorithm"] = "OcclusionMaskingInSPyReNet"
         self.params["occlusion_masking_config"] = {}
         self.params["num_bins"] = -1
         self.params["num_samples_per_bin"] = -1
-        self.params["detect_keyframes"] = True
+        self.params["detect_keyframes"] = False
 
     def detect_canvas(self, video_dir: Path, video_path: str, metadata: Dict[str, Any]) -> bool:
         # In case we already detected the canvas
@@ -474,7 +474,7 @@ class ProcessorMatting(ProcessorKeyframe):
         num_bins = self.params.get("num_bins", -1)
         num_samples_per_bin = self.params.get("num_samples_per_bin", -1)
         detect_canvas = self.params.get("detect_canvas", True)
-        detect_keyframes = self.params.get("detect_keyframes", True)
+        detect_keyframes = self.params.get("detect_keyframes", False)
         for i, vd in enumerate(video_dir_list):
             video_dir = Path(vd)
             log_file = str(video_dir / "ProcessorMatting.log")
