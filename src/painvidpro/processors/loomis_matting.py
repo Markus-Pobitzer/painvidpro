@@ -133,6 +133,7 @@ class ProcessorLoomisMatting(ProcessorMatting):
         disable_tqdm = self.params.get("disable_tqdm", True)
         num_bins = self.params.get("num_bins", -1)
         num_samples_per_bin = self.params.get("num_samples_per_bin", -1)
+        detect_keyframes = self.params.get("detect_keyframes", False)
         for i, vd in enumerate(video_dir_list):
             video_dir = Path(vd)
             log_file = str(video_dir / "ProcessorLoomisMatting.log")
@@ -173,7 +174,9 @@ class ProcessorLoomisMatting(ProcessorMatting):
                 continue
 
             # Detecting and extracting the keyframes
-            if not self._detect_keyframes(video_dir=video_dir, video_file_path=video_right, metadata=metadata):
+            if detect_keyframes and not self._detect_keyframes(
+                video_dir=video_dir, video_file_path=video_right, metadata=metadata
+            ):
                 continue
 
             # Extracting frames by computing the median of sampled frames
