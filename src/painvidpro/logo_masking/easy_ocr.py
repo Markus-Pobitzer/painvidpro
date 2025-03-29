@@ -60,5 +60,6 @@ class LogoMaskingEasyOCR(LogoMaskingBase):
         """
         ret: List[np.ndarray] = []
         for img in frame_list:
-            ret.append(self.reader.detect(img))
+            # ret.append(self.reader.detect(img))
+            ret.append(self.reader.readtext(img))
         return ret
