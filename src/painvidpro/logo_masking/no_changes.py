@@ -64,7 +64,7 @@ class LogoMaskingNoChanges(LogoMaskingBase):
 
         return mask
 
-    def compute_mask_list(self, frame_list: List[np.ndarray]) -> List[np.ndarray]:
+    def compute_mask_list(self, frame_list: List[np.ndarray], offload_model: bool = True) -> List[np.ndarray]:
         """Logo mask indicating no changes.
 
         All frames get analyzed and checked which pixels do not
@@ -72,6 +72,7 @@ class LogoMaskingNoChanges(LogoMaskingBase):
 
         Args:
             frame_list: List of frames in cv2 image format.
+            offload_model: Gets ignored.
 
         Returns:
             List with one mask.

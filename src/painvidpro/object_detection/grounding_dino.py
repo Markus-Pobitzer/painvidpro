@@ -134,6 +134,7 @@ class ObjectDetectionGroundingDino(ObjectDetectionBase):
 
         Args:
             frame_list: List of frames in cv2 image format or paths.
+            offload_model: Loads the model to CPU after usage.
 
         Returns:
             List of Lists indicatinig detected objects. For each image a List of dicts.

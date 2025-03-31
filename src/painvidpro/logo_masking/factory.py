@@ -4,6 +4,7 @@ from typing import Any, Dict
 
 from painvidpro.logo_masking.base import LogoMaskingBase
 from painvidpro.logo_masking.easy_ocr import LogoMaskingEasyOCR
+from painvidpro.logo_masking.grounding_dino import LogoMaskingGroundingDino
 from painvidpro.logo_masking.no_changes import LogoMaskingNoChanges
 
 
@@ -28,6 +29,8 @@ class LogoMaskingFactory:
             instance = LogoMaskingNoChanges()
         elif algorithm == "LogoMaskingEasyOCR":
             instance = LogoMaskingEasyOCR()
+        elif algorithm == "LogoMaskingGroundingDino":
+            instance = LogoMaskingGroundingDino()
         else:
             raise ValueError(f"Unknown algorithm: {algorithm}")
 
