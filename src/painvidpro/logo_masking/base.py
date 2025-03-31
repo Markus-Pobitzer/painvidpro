@@ -25,12 +25,13 @@ class LogoMaskingBase:
     def set_default_parameters(self):
         raise NotImplementedError("This method should be implemented by the child class.")
 
-    def compute_mask_list(self, frame_list: List[np.ndarray]) -> List[np.ndarray]:
+    def compute_mask_list(self, frame_list: List[np.ndarray], offload_model: bool = True) -> List[np.ndarray]:
         """
         Computes logo masks based on the input frames.
 
         Args:
             frame_list: List of frames in cv2 image format.
+            offload_model: Loads the internal to CPU after usage, only if applicable.
 
         Returns:
             List of masks, one for each input frame where a Logo may exist.

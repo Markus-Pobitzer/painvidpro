@@ -48,13 +48,14 @@ class LogoMaskingEasyOCR(LogoMaskingBase):
             return False, str(e)
         return True, ""
 
-    def compute_mask_list(self, frame_list: List[np.ndarray]) -> List[np.ndarray]:
+    def compute_mask_list(self, frame_list: List[np.ndarray], offload_model: bool = True) -> List[np.ndarray]:
         """Logo mask indicating Text.
 
         All frames get analyzed and checked which areas contain text.
 
         Args:
             frame_list: List of frames in cv2 image format.
+            offload_model: Gets ignored.
 
         Returns:
             List with a binary mask for each image.
