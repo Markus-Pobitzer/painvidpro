@@ -4,6 +4,7 @@ from typing import Any, Dict
 
 from painvidpro.occlusion_removing.base import OcclusionRemovingBase
 from painvidpro.occlusion_removing.frame_merging import OcclusionRemovingFrameMerging
+from painvidpro.occlusion_removing.lama_inpainting import OcclusionRemovingLamaInpainting
 
 
 class OcclusionRemovingFactory:
@@ -25,6 +26,8 @@ class OcclusionRemovingFactory:
         instance: OcclusionRemovingBase
         if algorithm == "OcclusionRemovingFrameMerging":
             instance = OcclusionRemovingFrameMerging()
+        elif algorithm == "OcclusionRemovingLamaInpainting":
+            instance = OcclusionRemovingLamaInpainting()
         else:
             raise ValueError(f"Unknown algorithm: {algorithm}")
 
