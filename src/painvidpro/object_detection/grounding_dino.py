@@ -67,6 +67,7 @@ class ObjectDetectionGroundingDino(ObjectDetectionBase):
             "model_id": "IDEA-Research/grounding-dino-tiny",
             "device": "cuda",
             "batch_size": 1,
+            "convert_input_from_bgr_to_rgb": True,
             "prompt": "a hand.",
             "box_threshold": 0.6,
             "text_threshold": 0.6,
@@ -133,7 +134,10 @@ class ObjectDetectionGroundingDino(ObjectDetectionBase):
         The desired objects should be set as parameters.
 
         Args:
-            frame_list: List of frames in cv2 image format or paths.
+            frame_list: List of frames in cv2 image format or paths. Since cv2 has the BGR
+                channeling order it gets automatically converted to a RGB ordering
+                if convert_input_from_bgr_to_rgb is specified in the configuration,
+                enabled as default.
             offload_model: Loads the model to CPU after usage.
 
         Returns:
@@ -142,11 +146,14 @@ class ObjectDetectionGroundingDino(ObjectDetectionBase):
         device = self.params.get("device", "cuda")
         batch_size = self.params.get("batch_size", 1)
         disable_tqdm = self.params.get("disable_tqdm", True)
+        convert_input_from_bgr_to_rgb = self.params.get("convert_input_from_bgr_to_rgb", True)
         self.model.to(device)
 
         ret: List[List[Dict[str, Any]]] = []
         for batch in tqdm(batch_list(frame_list, batch_size), disable=disable_tqdm, desc="Detecting objects"):
-            batch_img_list = [process_input(batch_frame) for batch_frame in batch]
+            batch_img_list = [
+                process_input(batch_frame, convert_bgr_to_rgb=convert_input_from_bgr_to_rgb) for batch_frame in batch
+            ]
             ret += self._object_detection(batch_img_list)
 
         if offload_model:

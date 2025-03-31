@@ -44,6 +44,7 @@ class SequenceDetectionGroundingDino(SequenceDetectionBase):
             "model_id": "IDEA-Research/grounding-dino-tiny",
             "device": "cuda",
             "batch_size": 1,
+            "convert_input_from_bgr_to_rgb": True,
             "prompt": "a hand.",
             "box_threshold": 0.7,
             "text_threshold": 0.7,
@@ -97,8 +98,11 @@ class SequenceDetectionGroundingDino(SequenceDetectionBase):
         """
         batch_size = self.params.get("batch_size", 1)
         disable_tqdm = self.params.get("disable_tqdm", True)
+        convert_input_from_bgr_to_rgb = self.params.get("convert_input_from_bgr_to_rgb", True)
         for batch in tqdm(batch_list(frame_idx_list, batch_size), disable=disable_tqdm, desc="Detecting objects"):
-            batch_img_list = [process_input(frame_list[idx]) for idx in batch]
+            batch_img_list = [
+                process_input(frame_list[idx], convert_bgr_to_rgb=convert_input_from_bgr_to_rgb) for idx in batch
+            ]
             label_list, scores_list = self._object_detection(batch_img_list)
             for frame_idx, label, score in zip(batch, label_list, scores_list):
                 # If text_threshold is set too high bounding boxes without any labels get predicted, so we remove them
@@ -114,7 +118,10 @@ class SequenceDetectionGroundingDino(SequenceDetectionBase):
         A BaseSequence is defined by a start index and end frame index.
 
         Args:
-            frame_list: List of frames in cv2 image format.
+            frame_list: List of frames in cv2 image format. Since cv2 has the BGR
+                channeling order it gets automatically converted to a RGB ordering
+                if convert_input_from_bgr_to_rgb is specified in the configuration,
+                enabled as default.
             offload_model: If set to true offloads the model to cpu afterwards.
                 If several inferences are done after each other this can be set to False.
 

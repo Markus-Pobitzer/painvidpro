@@ -14,15 +14,11 @@ class LogoMaskingGroundingDino(LogoMaskingBase, ObjectDetectionGroundingDino):
         ObjectDetectionGroundingDino.__init__(self)
 
     def set_default_parameters(self):
-        self.params = {
-            "model_id": "IDEA-Research/grounding-dino-tiny",
-            "device": "cuda",
-            "batch_size": 1,
-            "prompt": "a watermark. a logo. a text.",
-            "box_threshold": 0.4,
-            "text_threshold": 0.4,
-            "disable_tqdm": True,
-        }
+        ObjectDetectionGroundingDino.set_default_parameters(self)
+        self.params["prompt"] = "a watermark. a logo. a text."
+        # Reduce the thresholds
+        self.params["box_threshold"] = 0.4
+        self.params["text_threshold"] = 0.4
 
     def set_parameters(self, params: Dict[str, Any]) -> Tuple[bool, str]:
         """Sets the parameters.
