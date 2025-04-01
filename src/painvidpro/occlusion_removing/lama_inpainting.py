@@ -203,7 +203,9 @@ class OcclusionRemovingLamaInpainting(OcclusionRemovingBase):
         """Offloads the model to CPU, no effect if methdod has no model."""
         self.model.model.to("cpu")
 
-    def remove_occlusions(self, frame_list: List[np.ndarray], mask_list: List[np.ndarray]) -> List[np.ndarray]:
+    def remove_occlusions(
+        self, frame_list: List[np.ndarray], mask_list: List[np.ndarray], offload_model: bool = True
+    ) -> List[np.ndarray]:
         """
         Removes occlusions indicated by the masks.
 
@@ -213,6 +215,7 @@ class OcclusionRemovingLamaInpainting(OcclusionRemovingBase):
                 if convert_input_from_bgr_to_rgb is specified in the configuration,
                 enabled as default.
             mask_list: List of masks in cv2 format.
+            offload_model: Offloads the model to CPU after call.
 
         Returns:
             List of frames where the parts of the frame indicated
@@ -228,12 +231,13 @@ class OcclusionRemovingLamaInpainting(OcclusionRemovingBase):
             processed_mask = process_input(mask, convert_bgr_to_rgb=False)
             ret.append(self.model(processed_image, processed_mask, offlaod_model=False))
 
-        self.offload_model()
+        if offload_model:
+            self.offload_model()
 
         return ret
 
     def remove_occlusions_on_disk(
-        self, frame_path_list: List[str], mask_path_list: List[str], output_dir: str
+        self, frame_path_list: List[str], mask_path_list: List[str], output_dir: str, offload_model: bool = True
     ) -> List[str]:
         """
         Removes occlusions indicated by the masks.
@@ -244,6 +248,7 @@ class OcclusionRemovingLamaInpainting(OcclusionRemovingBase):
             frame_path_list: List of paths to frames representing the video.
             mask_path_list: List of paths to masks corresponding to each frame.
             output_dir: Directory where the output merged frames will be stored.
+            offload_model: Offloads the model to CPU after call.
 
         Returns:
             List of frame paths where the parts of the frame indicated

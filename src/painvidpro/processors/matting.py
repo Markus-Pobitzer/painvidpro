@@ -10,8 +10,10 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
+from painvidpro.logo_masking.factory import LogoMaskingBase, LogoMaskingFactory
 from painvidpro.object_detection.factory import ObjectDetectionBase, ObjectDetectionFactory
 from painvidpro.occlusion_masking.factory import OcclusionMaskingBase, OcclusionMaskingFactory
+from painvidpro.occlusion_removing.factory import OcclusionRemovingBase, OcclusionRemovingFactory
 from painvidpro.processors.keyframe import ProcessorKeyframe
 from painvidpro.utils.metadata import load_metadata, save_metadata
 from painvidpro.video_processing.utils import video_capture_context, video_writer_context
@@ -23,6 +25,8 @@ class ProcessorMatting(ProcessorKeyframe):
         super().__init__()
         self._canvas_detector: Optional[ObjectDetectionBase] = None
         self._rmbg_model: Optional[OcclusionMaskingBase] = None
+        self._logo_masking_model: Optional[LogoMaskingBase] = None
+        self._logo_removing_model: Optional[OcclusionRemovingBase] = None
 
     @property
     def canvas_detector(self) -> ObjectDetectionBase:
@@ -46,6 +50,28 @@ class ProcessorMatting(ProcessorKeyframe):
             )
         return self._rmbg_model
 
+    @property
+    def logo_masking_model(self) -> LogoMaskingBase:
+        if self._logo_masking_model is None:
+            raise RuntimeError(
+                (
+                    "Logo Masking model not correctly instanciated. Make sure to call "
+                    "set_parameters to laod the model."
+                )
+            )
+        return self._logo_masking_model
+
+    @property
+    def logo_removing_model(self) -> OcclusionRemovingBase:
+        if self._logo_removing_model is None:
+            raise RuntimeError(
+                (
+                    "Logo REmoving model not correctly instanciated. Make sure to call "
+                    "set_parameters to laod the model."
+                )
+            )
+        return self._logo_removing_model
+
     def set_parameters(self, params: Dict[str, Any]) -> Tuple[bool, str]:
         """Sets the parameters.
 
@@ -62,12 +88,20 @@ class ProcessorMatting(ProcessorKeyframe):
         occlusion_masking_algorithm = self.params.get("occlusion_masking_algorithm", "OcclusionMaskingInSPyReNet")
         occlusion_masking_config = self.params.get("occlusion_masking_config", {})
         detect_canvas = self.params.get("detect_canvas", False)
+        remove_logos = self.params.get("remove_logos", False)
         try:
             if detect_canvas:
                 self._canvas_detector = ObjectDetectionFactory().build(
                     self.params["canvas_detector_algorithm"], self.params["canvas_detector_config"]
                 )
             self._rmbg_model = OcclusionMaskingFactory().build(occlusion_masking_algorithm, occlusion_masking_config)
+            if remove_logos:
+                self._logo_masking_model = LogoMaskingFactory().build(
+                    self.params["logo_masking_algorithm"], self.params["logo_masking_config"]
+                )
+                self._logo_removing_model = OcclusionRemovingFactory().build(
+                    self.params["logo_removing_algorithm"], self.params["logo_removing_config"]
+                )
         except Exception as e:
             return False, str(e)
         return True, ""
@@ -81,9 +115,38 @@ class ProcessorMatting(ProcessorKeyframe):
         self.params["occlusion_masking_config"] = {}
         self.params["num_bins"] = -1
         self.params["num_samples_per_bin"] = -1
+        self.params["remove_logos"] = False
+        self.params["logo_masking_algorithm"] = "LogoMaskingGroundingDino"
+        self.params["logo_masking_config"] = {}
+        self.params["logo_removing_algorithm"] = "OcclusionRemovingLamaInpainting"
+        self.params["logo_removing_config"] = {}
         self.params["detect_keyframes"] = False
 
     def detect_canvas(self, video_dir: Path, video_path: str, metadata: Dict[str, Any]) -> bool:
+        """Detects a canvas region in the video, crops the video to this region, and updates metadata.
+
+        If the metadata indicates the canvas has already been detected, the function exits early. Otherwise,
+        it processes the video starting from the frame specified in the metadata to detect the canvas.
+        If a canvas is detected, the video is cropped to the detected region,
+        overwriting the original video file. Metadata is updated to reflect the detection status.
+
+        Args:
+            video_dir: Path to the directory containing the video.
+            video_path: Path to the video file.
+            metadata: Metadata dictionary containing:
+                      - "start_frame_idx": Frame index to start canvas detection.
+                      - "canvas_detected": Flag indicating if the canvas was already detected.
+                      The dictionary is modified in-place to add/update the "canvas_detected" key.
+
+        Returns:
+            bool: Always returns True, indicating the process completed (successful detection or fallback to original video).
+                  Returns immediately if the canvas was already pre-detected.
+
+        Side Effects:
+            - Overwrites the original video with the cropped version if a canvas is detected.
+            - Modifies the metadata dictionary to set "canvas_detected" = True on successful detection.
+            - Persists updated metadata to disk.
+        """
         # In case we already detected the canvas
         if metadata.get("canvas_detected", False):
             return True
@@ -406,6 +469,51 @@ class ProcessorMatting(ProcessorKeyframe):
         self.logger.info(f"Successfully extracted {len(median_frame_paths)} median frames.")
         return True
 
+    def _remove_logo(self, video_dir: Path, metadata: Dict[str, Any], disable_tqdm: bool = True) -> bool:
+        """Removes logos from extracted frames.
+
+        Processes all frames listed in metadata's "extracted_frames" by first detecting logos
+        with a masking model, then removing them. Overwrites original frames
+        with cleaned versions.
+
+        Args:
+            video_dir: Directory containing extracted frames from video.
+            metadata: Metadata as dict.
+            disable_tqdm: If True, disables progress bar visualization.
+
+        Returns:
+            bool: Always returns True, indicating completion of processing attempts for all frames.
+                  Individual frame failures are logged but don't prevent overall completion.
+        """
+        extracted_frame_list: List[str] = metadata.get("extracted_frames", [])
+        succ_count = 0
+        for rel_path in tqdm(extracted_frame_list, disable=disable_tqdm, desc="Removing Logos from frames"):
+            frame_path = str(video_dir / rel_path)
+            try:
+                img = cv2.imread(frame_path)
+                mask_list = self.logo_masking_model.compute_mask_list(frame_list=[img], offload_model=False)
+                cleaned_list = self.logo_removing_model.remove_occlusions(
+                    frame_list=[img], mask_list=mask_list, offload_model=False
+                )
+                # Since the output is in RGB convert to BGR
+                cleaned_img = cv2.cvtColor(cleaned_list[0], cv2.COLOR_RGB2BGR)
+                # Overwriting frame with cleaned one
+                cv2.imwrite(frame_path, cleaned_img)
+                succ_count += 1
+            except Exception as e:
+                self.logger.info(
+                    (f"Was not able to remove Logos of frame {frame_path}. " f"Following error occurred:\n{e}")
+                )
+        self.logo_masking_model.offload_model()
+        self.logo_removing_model.offload_model()
+        self.logger.info(
+            (
+                f"Successfully removed logos in {succ_count} frames. "
+                f"In total there are {len(extracted_frame_list)} frames."
+            )
+        )
+        return True
+
     def save_reference_frame(self, video_dir: Path, metadata: Dict[str, Any], reference_frame_path: str) -> bool:
         """Saves the last extracted frame as reference frame.
 
@@ -474,6 +582,7 @@ class ProcessorMatting(ProcessorKeyframe):
         num_bins = self.params.get("num_bins", -1)
         num_samples_per_bin = self.params.get("num_samples_per_bin", -1)
         detect_canvas = self.params.get("detect_canvas", True)
+        remove_logos = self.params.get("remove_logos", False)
         detect_keyframes = self.params.get("detect_keyframes", False)
         for i, vd in enumerate(video_dir_list):
             video_dir = Path(vd)
@@ -522,6 +631,12 @@ class ProcessorMatting(ProcessorKeyframe):
                 num_bins=num_bins,
                 num_samples_per_bin=num_samples_per_bin,
                 disable_tqdm=disable_tqdm,
+            ):
+                continue
+
+            # Removes logo and other text from extracted frames
+            if remove_logos and not self._remove_logo(
+                video_dir=video_dir, metadata=metadata, disable_tqdm=disable_tqdm
             ):
                 continue
 
