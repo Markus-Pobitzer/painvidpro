@@ -22,6 +22,10 @@ class LogoMaskingBase:
         self.params.update(params)
         return True, ""
 
+    def offload_model(self):
+        """Offloads the model to CPU, no effect if methdod has no model."""
+        pass
+
     def set_default_parameters(self):
         raise NotImplementedError("This method should be implemented by the child class.")
 

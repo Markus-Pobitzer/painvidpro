@@ -38,13 +38,20 @@ class OcclusionRemovingBase:
             if os.path.exists(file_path):
                 os.remove(file_path)
 
-    def remove_occlusions(self, frame_list: List[np.ndarray], mask_list: List[np.ndarray]) -> List[np.ndarray]:
+    def offload_model(self):
+        """Offloads the model to CPU, no effect if methdod has no model."""
+        pass
+
+    def remove_occlusions(
+        self, frame_list: List[np.ndarray], mask_list: List[np.ndarray], offload_model: bool = True
+    ) -> List[np.ndarray]:
         """
         Removes occlusions indicated by the masks.
 
         Args:
             frame_list: List of frames in cv2 image format.
             mask_list: List of masks in cv2 format.
+            offload_model: Loads the model to CPU after usage.
 
         Returns:
             List of frames where the parts of the frame indicated
@@ -53,7 +60,7 @@ class OcclusionRemovingBase:
         raise NotImplementedError("This method should be implemented by the child class.")
 
     def remove_occlusions_on_disk(
-        self, frame_path_list: List[str], mask_path_list: List[str], output_dir: str
+        self, frame_path_list: List[str], mask_path_list: List[str], output_dir: str, offload_model: bool = True
     ) -> List[str]:
         """
         Removes occlusions indicated by the masks.
@@ -64,6 +71,7 @@ class OcclusionRemovingBase:
             frame_path_list: List of paths to frames representing the video.
             mask_path_list: List of paths to masks corresponding to each frame.
             output_dir: Directory where the output merged frames will be stored.
+            offload_model: Loads the model to CPU after usage.
 
         Returns:
             List of frame paths where the parts of the frame indicated
