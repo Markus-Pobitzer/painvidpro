@@ -438,6 +438,32 @@ test = ["Pillow", "contourpy[test-no-images]", "matplotlib"]
 test-no-images = ["pytest", "pytest-cov", "pytest-rerunfailures", "pytest-xdist", "wurlitzer"]
 
 [[package]]
+name = "controlnet-aux"
+version = "0.0.3"
+description = "Human Pose"
+optional = false
+python-versions = ">=3.7.0"
+groups = ["main"]
+files = [
+    {file = "controlnet_aux-0.0.3-py3-none-any.whl", hash = "sha256:589d63c1325727f6b35daf4f5ebfb0ebf08252943d05fb262aa3175cbcf53273"},
+    {file = "controlnet_aux-0.0.3.tar.gz", hash = "sha256:eb5ce3ad5d3991d3aeff5bdb542c344bacd7a27146f9426dbf6f02488bd03935"},
+]
+
+[package.dependencies]
+einops = "*"
+filelock = "*"
+huggingface-hub = "*"
+importlib-metadata = "*"
+numpy = "*"
+opencv-python = "*"
+Pillow = "*"
+scikit-image = "*"
+scipy = "*"
+timm = "*"
+torch = "*"
+torchvision = "*"
+
+[[package]]
 name = "cycler"
 version = "0.12.1"
 description = "Composable style cycles"
@@ -532,6 +558,18 @@ scipy = "*"
 Shapely = "*"
 torch = "*"
 torchvision = ">=0.5"
+
+[[package]]
+name = "einops"
+version = "0.8.1"
+description = "A new flavour of deep learning operations"
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = [
+    {file = "einops-0.8.1-py3-none-any.whl", hash = "sha256:919387eb55330f5757c6bea9165c5ff5cfe63a642682ea788a6d472576d81737"},
+    {file = "einops-0.8.1.tar.gz", hash = "sha256:de5d960a7a761225532e0f1959e5315ebeafc0cd43394732f103ca44b9837e84"},
+]
 
 [[package]]
 name = "eval-type-backport"
@@ -3806,4 +3844,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "aa24a3248bca9b56ed633a6a2ed2b4fd3048d0f1f393ec552bf0d20ffd4dc11c"
+content-hash = "c88681a7d37302c0552d4bca0871efeceadf3cfdd0da4ac02fa64b1260c82a5e"
