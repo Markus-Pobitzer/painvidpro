@@ -1,6 +1,6 @@
 """Utility for processing images."""
 
-from typing import Union
+from typing import List, Optional, Tuple, Union
 
 import cv2
 import numpy as np
@@ -60,3 +60,35 @@ def convert_cv2_to_pil(img: np.ndarray) -> Image:
         An image in PIL format.
     """
     return Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+
+
+def find_best_aspect_ratio(image_size: Tuple[int, int], size_list: List[Tuple[int, int]]) -> Optional[Tuple[int, int]]:
+    """
+    Find the best image size in size_list that preserves the
+    original image's aspect ratio the closests.
+
+    Args:
+        image_size: Original image dimensions (width, height).
+        size_list: List of candidate sizes [(width, height), ...].
+
+    Returns:
+        tuple: Best matching model size, or None if size_list is empty.
+    """
+    original_width, original_height = image_size
+    original_ratio = original_width / original_height
+    best_size = None
+    min_diff = float("inf")
+
+    for size in size_list:
+        model_width, model_height = size
+        model_ratio = model_width / model_height
+        ratio_diff = abs(original_ratio - model_ratio)
+
+        # Update best size if current model is better match
+        if ratio_diff < min_diff:
+            min_diff = ratio_diff
+            best_size = size
+        elif ratio_diff == min_diff:
+            pass
+
+    return best_size
