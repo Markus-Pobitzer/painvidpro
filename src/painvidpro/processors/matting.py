@@ -487,8 +487,8 @@ class ProcessorMatting(ProcessorKeyframe):
         """
         extracted_frame_list: List[str] = metadata.get("extracted_frames", [])
         succ_count = 0
-        for rel_path in tqdm(extracted_frame_list, disable=disable_tqdm, desc="Removing Logos from frames"):
-            frame_path = str(video_dir / rel_path)
+        for extr_frame_entry in tqdm(extracted_frame_list, disable=disable_tqdm, desc="Removing Logos from frames"):
+            frame_path = str(video_dir / extr_frame_entry["path"])
             try:
                 img = cv2.imread(frame_path)
                 mask_list = self.logo_masking_model.compute_mask_list(frame_list=[img], offload_model=False)
