@@ -19,6 +19,7 @@ class LogoMaskingGroundingDino(LogoMaskingBase, ObjectDetectionGroundingDino):
         # Reduce the thresholds
         self.params["box_threshold"] = 0.4
         self.params["text_threshold"] = 0.4
+        self.params["bbox_max_area"] = 0.25
 
     def set_parameters(self, params: Dict[str, Any]) -> Tuple[bool, str]:
         """Sets the parameters.
@@ -36,6 +37,15 @@ class LogoMaskingGroundingDino(LogoMaskingBase, ObjectDetectionGroundingDino):
         """Offloads the model to CPU, no effect if methdod has no model."""
         return ObjectDetectionGroundingDino.offload_model(self)
 
+    def bbox_area_too_large(self, image: np.ndarray, bbox: Tuple[int, int, int, int], threshold: float = 0.25):
+        """Checks if the realtve bounding box area is bigger than the threshold."""
+        rel_width = bbox[2] - bbox[0]
+        rel_height = bbox[3] - bbox[1]
+        area = rel_width * rel_height
+        img_area = image.shape[1] * image.shape[0]
+        rel_area = area / img_area
+        return rel_area > threshold
+
     def _create_detection_mask(self, image: np.ndarray, detection_list: List[Dict[str, Any]]):
         """Creates binary mask where objects were detected.
 
@@ -47,6 +57,7 @@ class LogoMaskingGroundingDino(LogoMaskingBase, ObjectDetectionGroundingDino):
             An array with a binary mask indidcating where the object is.
         """
         mask = np.zeros(image.shape[:2], dtype=bool)
+        threshold = self.params.get("bbox_max_area", 0.25)
 
         for detection in detection_list:
             box = detection["box"]
@@ -61,6 +72,9 @@ class LogoMaskingGroundingDino(LogoMaskingBase, ObjectDetectionGroundingDino):
 
             # Skip invalid boxes (where min >= max after clamping)
             if x_min >= x_max or y_min >= y_max:
+                continue
+
+            if self.bbox_area_too_large(image=image, bbox=(x_min, y_min, x_max, y_max), threshold=threshold):
                 continue
 
             # Set the region in the mask to True
