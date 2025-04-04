@@ -71,6 +71,8 @@ def perpare_data(
         "video_license": metadata.get("license", ""),
         "video_channel": metadata.get("channel", ""),
         "video_channel_id": metadata.get("video_channel_id", ""),
+        "art_style": video_item.art_style,
+        "art_genre": video_item.art_genre,
         "art_media": video_item.art_media,
     }
     return True, ret
