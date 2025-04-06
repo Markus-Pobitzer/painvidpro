@@ -6,12 +6,12 @@ from typing import List
 from painvidpro.pipeline.pipeline import Pipeline
 
 
-def process_jsonl_files(base_dir: str, jsonl_files: List[str]) -> None:
-    """Process multiple .jsonl files using the pipeline.
+def register_jsonl_files(base_dir: str, jsonl_files: List[str]) -> None:
+    """Registers multiple .jsonl files using the pipeline.
 
     Args:
-        base_dir: Root directory for the pipeline data
-        jsonl_files: List of paths to .jsonl files to process
+        base_dir: Root directory for the pipeline data.
+        jsonl_files: List of paths to .jsonl files to register.
     """
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
     logger = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ def process_jsonl_files(base_dir: str, jsonl_files: List[str]) -> None:
         logger.info(f"Initializing pipeline with base directory: {base_dir}")
         pipeline = Pipeline(base_dir=base_dir)
 
-        # Process each file
+        # Register each file
         for file_path in jsonl_files:
             try:
                 path = Path(file_path)
@@ -32,15 +32,15 @@ def process_jsonl_files(base_dir: str, jsonl_files: List[str]) -> None:
                     logger.warning(f"Skipping non-JSONL file: {file_path}")
                     continue
 
-                logger.info(f"Processing file: {path.resolve()}")
-                processed_paths = pipeline.process_video_input(str(path))
-                logger.info(f"Successfully processed {len(processed_paths)} video(s) from {path.name}")
+                logger.info(f"Registering file: {path.resolve()}")
+                processed_paths = pipeline.register_video_input(str(path))
+                logger.info(f"Successfully registered {len(processed_paths)} video(s) from {path.name}")
 
             except Exception as e:
-                logger.error(f"Failed to process {path.name}: {str(e)}", exc_info=True)
+                logger.error(f"Failed to register {path.name}: {str(e)}", exc_info=True)
                 continue
 
-        logger.info("Finished processing all specified files")
+        logger.info("Finished registering all specified files")
 
     except Exception as e:
         logger.error(f"Critical error occurred: {str(e)}", exc_info=True)
@@ -48,10 +48,10 @@ def process_jsonl_files(base_dir: str, jsonl_files: List[str]) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Process multiple .jsonl files")
+    parser = argparse.ArgumentParser(description="Register multiple .jsonl files")
     parser.add_argument("--base-dir", type=str, required=True, help="Base directory for the pipeline data")
-    parser.add_argument("--files", type=str, required=True, nargs="+", help="Paths to .jsonl files to process")
+    parser.add_argument("--files", type=str, required=True, nargs="+", help="Paths to .jsonl files to register")
 
     args = parser.parse_args()
 
-    process_jsonl_files(base_dir=args.base_dir, jsonl_files=args.files)
+    register_jsonl_files(base_dir=args.base_dir, jsonl_files=args.files)

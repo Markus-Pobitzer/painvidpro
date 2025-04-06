@@ -1,5 +1,6 @@
 """The Pipeline to process video inputs."""
 
+import copy
 import dataclasses
 import json
 import logging
@@ -48,15 +49,15 @@ class Pipeline:
             self.video_item_dict = {"youtube": {}}
             self.save()
 
-    def process_youtube_video_input(self, video_item: VideoItem) -> Tuple[bool, List[str]]:
-        """Processes a YouTube video input and updates the video item dictionary.
+    def register_youtube_video_input(self, video_item: VideoItem) -> Tuple[bool, List[str]]:
+        """Registers a YouTube video input and updates the video item dictionary.
 
         Args:
             video_item: An instance of VideoItem containing details about the YouTube video.
 
         Returns:
             A tuple where the first element is a boolean indicating success, and the second
-            element is a list of strings with the paths to the processed video directories
+            element is a list of strings with the paths to the registered video directories
             or error messages.
         """
         url = video_item.url
@@ -89,14 +90,14 @@ class Pipeline:
                 ret.append(str(video_dir))
         return True, ret
 
-    def process_video_input(self, video_input_file: str) -> List[str]:
-        """Processes a video input file and updates the video item dictionary.
+    def register_video_input(self, video_input_file: str) -> List[str]:
+        """Register a video input file and updates the video item dictionary.
 
         Args:
             video_input_file: The path to the file containing video item details in JSONL format.
 
         Returns:
-            A list of strings with the paths to the processed video directories.
+            A list of strings with the paths to the registered video directories.
         """
         video_item_list: List[VideoItem] = []
         ret: List[str] = []
@@ -106,12 +107,15 @@ class Pipeline:
 
         for vi in video_item_list:
             if vi.source == "youtube":
-                succ, msg_list = self.process_youtube_video_input(vi)
+                succ, msg_list = self.register_youtube_video_input(vi)
                 if succ:
                     ret += msg_list
                 else:
                     self.logger.info(
-                        (f"Was not successfull in processing Video Item {vi}." f"The occurred problem: {msg_list[0]}.")
+                        (
+                            f"Was not successfull in registering Video Item {vi}."
+                            f"The occurred problem: {msg_list[0]}."
+                        )
                     )
             else:
                 self.logger.info(f"No support for source {vi.source} in Video Item {vi}.")
@@ -152,6 +156,40 @@ class Pipeline:
         video_data = self.video_item_dict[source][video_id]
         self.process_video(video_data=video_data, batch_size=batch_size)
 
+    def process_video_by_id_overwrite_processor(
+        self, source: str, video_id: str, processor_name: str, processor_config: Dict[str, Any], batch_size: int = -1
+    ) -> None:
+        """Process a single video identified by its source and video ID using processor.
+
+        Retrieves the video data from the pipeline's state and applies the configured processors.
+        If the specified source or video ID does not exist, logs an informational message and exits.
+        Uses the specified processor.
+
+        Args:
+            source: The source platform of the video (e.g., "youtube").
+            video_id: The unique identifier of the video within the source platform.
+            processor_name: The name of the porceossor.
+            processor_config: The configuration for the processor.
+            batch_size: Number of batches to use during processing..
+
+        Returns:
+            None
+        """
+        if source not in self.video_item_dict:
+            self.logger.info(f"Source '{source}' not found in pipeline. Skipping processing.")
+            return
+        if video_id not in self.video_item_dict[source]:
+            self.logger.info(f"Video ID '{video_id}' not found in source '{source}'. Skipping processing.")
+            return
+        video_data = copy.deepcopy(self.video_item_dict[source][video_id])
+        video_data["video_processor"] = [
+            {
+                "name": processor_name,
+                "config": processor_config,
+            }
+        ]
+        self.process_video(video_data=video_data, batch_size=batch_size)
+
     def process(self, batch_size: int = -1):
         """Processes all video entries in the Pipeline that have not been processed yet."""
         for source in self.video_item_dict.keys():
@@ -160,3 +198,24 @@ class Pipeline:
                 _, video_metadata = load_metadata(video_dir=video_dir)
                 if not video_metadata["processed"]:
                     self.process_video(video_data=self.video_item_dict[source][video_id], batch_size=batch_size)
+
+    def process_overwrite_processor(self, processor_name: str, processor_config: Dict[str, Any], batch_size: int = -1):
+        """Processes all video entries in the Pipeline with the specified processor.
+
+        Please note that this is not the intended way to process the pipeline entries
+        since the Pipeline object does not keep track, which processor was used.
+
+        Args:
+            processor_name: The name of the porceossor.
+            processor_config: The configuration for the processor.
+            batch_size: Gets propgaed to the processor.
+        """
+        for source in self.video_item_dict.keys():
+            for video_id in tqdm(self.video_item_dict[source].keys(), desc="Processing video"):
+                self.process_video_by_id_overwrite_processor(
+                    source=source,
+                    video_id=video_id,
+                    processor_name=processor_name,
+                    processor_config=processor_config,
+                    batch_size=batch_size,
+                )
