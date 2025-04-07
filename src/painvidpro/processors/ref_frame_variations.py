@@ -40,6 +40,7 @@ class ProcessorRefFrameVariations(ProcessorRealisticFrame):
             "a pencil drawing",
         ]
         self.params["variations_dir"] = "reference_frame_variations"
+        self.params["pad_input"] = True
 
     def _process(self, video_dir: Path, reference_frame_path: str) -> bool:
         """Processes a single reference frame to generate several version.
