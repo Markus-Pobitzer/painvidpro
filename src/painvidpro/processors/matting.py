@@ -469,6 +469,18 @@ class ProcessorMatting(ProcessorKeyframe):
         self.logger.info(f"Successfully extracted {len(median_frame_paths)} median frames.")
         return True
 
+    def _create_combined_mask(self, mask_list: List[np.ndarray]) -> np.ndarray:
+        """Extracts a mask where pixels are masked at least half the time."""
+        # Convert the list of boolean masks to a 3D numpy array
+        mask_array = np.array(mask_list)
+        sum_masks = mask_array.sum(axis=0)
+        # Calculate the threshold (n/2 rounded up)
+        n = len(mask_list)
+        threshold = (n + 1) // 2
+        # Create the combined mask where count >= threshold
+        combined_mask = sum_masks >= threshold
+        return combined_mask
+
     def _remove_logo(self, video_dir: Path, metadata: Dict[str, Any], disable_tqdm: bool = True) -> bool:
         """Removes logos from extracted frames.
 
@@ -487,13 +499,40 @@ class ProcessorMatting(ProcessorKeyframe):
         """
         extracted_frame_list: List[str] = metadata.get("extracted_frames", [])
         succ_count = 0
-        for extr_frame_entry in tqdm(extracted_frame_list, disable=disable_tqdm, desc="Removing Logos from frames"):
+        frame_path_list: List[str] = []
+        mask_list: List[np.ndarray] = []
+
+        # Detection
+        for extr_frame_entry in tqdm(extracted_frame_list, disable=disable_tqdm, desc="Detecting Logos from frames"):
             frame_path = str(video_dir / extr_frame_entry["path"])
             try:
                 img = cv2.imread(frame_path)
-                mask_list = self.logo_masking_model.compute_mask_list(frame_list=[img], offload_model=False)
+                mask = self.logo_masking_model.compute_mask_list(frame_list=[img], offload_model=False)[0]
+                # Only append when no exception occured
+                frame_path_list.append(frame_path)
+                mask_list.append(mask)
+            except Exception as e:
+                self.logger.info(
+                    (f"Was not able to detect Logos of frame {frame_path}. " f"Following error occurred:\n{e}")
+                )
+        self.logo_masking_model.offload_model()
+
+        if len(mask_list) == 0:
+            self.logger.info("No frames left to remove logos from.")
+            return True
+
+        # Computing the mask where fix logos most likely are
+        video_mask = self._create_combined_mask(mask_list=mask_list)
+        mask_list = [np.logical_or(mask, video_mask) for mask in mask_list]
+
+        # Removing
+        for frame_path, mask in tqdm(
+            zip(frame_path_list, mask_list), disable=disable_tqdm, desc="Removing Logos from frames"
+        ):
+            try:
+                img = cv2.imread(frame_path)
                 cleaned_list = self.logo_removing_model.remove_occlusions(
-                    frame_list=[img], mask_list=mask_list, offload_model=False
+                    frame_list=[img], mask_list=[mask], offload_model=False
                 )
                 # Since the output is in RGB convert to BGR
                 cleaned_img = cv2.cvtColor(cleaned_list[0], cv2.COLOR_RGB2BGR)
@@ -502,10 +541,10 @@ class ProcessorMatting(ProcessorKeyframe):
                 succ_count += 1
             except Exception as e:
                 self.logger.info(
-                    (f"Was not able to remove Logos of frame {frame_path}. " f"Following error occurred:\n{e}")
+                    (f"Was not able to remove logos of frame {frame_path}. " f"Following error occurred:\n{e}")
                 )
-        self.logo_masking_model.offload_model()
         self.logo_removing_model.offload_model()
+
         self.logger.info(
             (
                 f"Successfully removed logos in {succ_count} frames. "
