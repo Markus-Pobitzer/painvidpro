@@ -8,6 +8,7 @@ from PIL import Image
 
 from painvidpro.processors.realistic_frame import ProcessorRealisticFrame
 from painvidpro.utils.image_processing import find_best_aspect_ratio
+from painvidpro.utils.metadata import load_metadata, save_metadata
 
 
 class ProcessorRefFrameVariations(ProcessorRealisticFrame):
@@ -54,18 +55,34 @@ class ProcessorRefFrameVariations(ProcessorRealisticFrame):
         """
         prompt_list = self.params.get("prompt_list", [])
         variations_dir = self.params.get("variations_dir", "reference_frame_variations")
+        negative_prompt = self.params.get("negative_prompt", "")
+        num_inference_steps = self.params.get("num_inference_steps", 30)
+
         if len(prompt_list) == 0:
             self.logger.info("Prompt list is empty, no images were generated.")
             return False
 
-        negative_prompt = self.params.get("negative_prompt", "")
-        num_inference_steps = self.params.get("num_inference_steps", 30)
+        # Loading the metadata dict
+        succ, metadata = load_metadata(video_dir, metadata_name=self.metadata_name)
+        if not succ:
+            self.logger.info(f" Failed opening metadata {str(video_dir / self.metadata_name)}.")
+            return False
+
+        if "reference_frame_variations" in metadata:
+            self.logger.info(
+                (" Metadata already contains variations of reference" " frames, no new frames will be generated.")
+            )
+            return True
+
+        # Load reference image
         try:
             image_path = video_dir / reference_frame_path
             image = Image.open(image_path)
         except Exception as e:
             self.logger.info(f"Failed to laod image {str(image_path)} with error: {e}")
             return False
+
+        # Estimate best inference resolution
         width, height = image.size
         size_list = self.params.get("model_size_list", [])
         best_resolution = find_best_aspect_ratio(image_size=(width, height), size_list=size_list)
@@ -78,6 +95,9 @@ class ProcessorRefFrameVariations(ProcessorRealisticFrame):
             )
             return False
         self.logger.info(f"Selected inference size {best_resolution} for image with size {image.size}.")
+
+        # Generate images
+        metadata_entry_list: List[Dict[str, Any]] = []
         try:
             resized_image = self._prepare_image(image, inference_size=best_resolution)
             control_image = self._get_control_image(resized_image, inference_size=best_resolution)
@@ -98,10 +118,30 @@ class ProcessorRefFrameVariations(ProcessorRealisticFrame):
                 final_frame_name = f"reference_frame_variation_{str(index).zfill(self.zfill_num)}.png"
                 out_path = str(variations_path / final_frame_name)
                 final_image.save(out_path)
+                metadata_entry_list.append(
+                    {
+                        "path": str(Path(variations_dir) / final_frame_name),
+                        "prompt": prompt,
+                        "negative_prompt": negative_prompt,
+                        "num_inference_steps": num_inference_steps,
+                        "model": self.params.get("model", ""),
+                        "controlnet_type": self.params.get("controlnet_type", ""),
+                        "processor": self.__class__.__name__,
+                    }
+                )
             self.logger.info(f"Successfully generated {len(prompt_list)} images for specified frame.")
         except Exception as e:
             self.logger.info((f"Was not able to generate an image for {str(image_path)}, error: {str(e)}"))
             return False
+
+        if len(metadata_entry_list) == 0:
+            # This should never happen
+            self.logger.info("Was not able to save the metadata of the generated images.")
+            return False
+
+        # Save entries in metadata
+        metadata["reference_frame_variations"] = metadata.get("reference_frame_variations", []) + metadata_entry_list
+        save_metadata(video_dir=video_dir, metadata=metadata, metadata_name=self.metadata_name)
         return True
 
     def process(self, video_dir_list: List[str], batch_size: int = -1) -> List[bool]:
@@ -130,6 +170,7 @@ class ProcessorRefFrameVariations(ProcessorRealisticFrame):
             )
             reference_frame_name = self.params.get("reference_frame_name", "reference_frame.png")
             reference_frame_path = str(video_dir / reference_frame_name)
+
             if not self._process(video_dir=video_dir, reference_frame_path=reference_frame_path):
                 continue
 

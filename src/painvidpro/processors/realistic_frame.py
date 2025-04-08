@@ -30,6 +30,7 @@ class ProcessorRealisticFrame(ProcessorBase):
             datefmt="%d-%m-%Y %H:%M:%S",
         )
         self.generator = torch.manual_seed(0)
+        self.metadata_name = "metadata.json"
 
     @property
     def pipe(self) -> StableDiffusionControlNetPipeline:
