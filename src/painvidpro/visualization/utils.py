@@ -223,6 +223,20 @@ def get_reference_frame(reference_frame_path: str, video_path: str, keyframes: L
         return np.zeros((250, 250, 3)) + (255, 0, 0)
 
 
+def get_ref_frame_variations(sub_subfolder: str, metadata: Dict[str, Any]) -> List[np.ndarray]:
+    """Loads the reference frame variations."""
+    ret: List[np.ndarray] = []
+    for entry in metadata.get("reference_frame_variations", []):
+        try:
+            img_path = os.path.join(sub_subfolder, entry["path"])
+            img = cv2.imread(img_path)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            ret.append(img)
+        except Exception:
+            pass
+    return ret
+
+
 def create_temp_file(suffix: str = ".mp4") -> str:
     """Function to create a temporary file and return its path."""
     # Create a temporary file with a .mp4 extension
