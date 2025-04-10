@@ -80,6 +80,8 @@ class Pipeline:
                 video_dir.mkdir(parents=True, exist_ok=True)
                 # Metadata is jsut a dict at the moment
                 metadata = video_data
+                metadata["art_style"] = video_item.art_style
+                metadata["art_genre"] = video_item.art_genre
                 metadata["art_media"] = video_item.art_media
                 metadata["processed"] = False
                 save_metadata(video_dir=video_dir, metadata=metadata)
