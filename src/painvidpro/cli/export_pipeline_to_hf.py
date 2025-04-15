@@ -29,6 +29,14 @@ def parse_arguments() -> argparse.Namespace:
         default=-1,
         help="Number of processes to use for parallelism, default uses available resources.",
     )
+    parser.add_argument(
+        "--sample_ref_frame_variation",
+        action="store_true",
+        help=(
+            "If set uses the reference frame variations isntead of the reference frame. "
+            "If no variation was found, falls back to the original reference frame."
+        ),
+    )
 
     return parser.parse_args()
 
@@ -55,7 +63,11 @@ def main() -> None:
 
         # Step 1: Create Hugging Face DatasetDict
         print("\n🚀 Creating Hugging Face dataset...")
-        dataset = export_to_hf_dataset(pipeline_path=args.pipeline_path, train_split_size=args.train_split_size)
+        dataset = export_to_hf_dataset(
+            pipeline_path=args.pipeline_path,
+            train_split_size=args.train_split_size,
+            sample_ref_frame_variation=args.sample_ref_frame_variation,
+        )
         print("✅ Dataset created successfully")
 
         num_proc = int(args.num_proc)
