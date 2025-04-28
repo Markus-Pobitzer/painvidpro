@@ -92,3 +92,31 @@ def find_best_aspect_ratio(image_size: Tuple[int, int], size_list: List[Tuple[in
             pass
 
     return best_size
+
+
+def resize_and_center_crop(
+    image: np.ndarray, target_width: int, target_height: int, interpolation=cv2.INTER_AREA
+) -> np.ndarray:
+    """Resize and center crop an image.
+
+    Keeps aspect ratio.
+    Code from https://github.com/lllyasviel/Paints-UNDO.
+
+    Args:
+        image: The image as np.ndarray.
+        target_width: The desired width.
+        target_height: The desired height.
+        interpolation: The interporlation setting.
+
+    Return:
+        The resized and center cropped image as an array.
+    """
+    original_height, original_width = image.shape[:2]
+    k = max(target_height / original_height, target_width / original_width)
+    new_width = int(round(original_width * k))
+    new_height = int(round(original_height * k))
+    resized_image = cv2.resize(image, (new_width, new_height), interpolation=interpolation)
+    x_start = (new_width - target_width) // 2
+    y_start = (new_height - target_height) // 2
+    cropped_image = resized_image[y_start : y_start + target_height, x_start : x_start + target_width]
+    return cropped_image
