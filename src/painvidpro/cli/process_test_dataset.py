@@ -15,9 +15,13 @@ def main():
     parser = argparse.ArgumentParser(description="Processes a Dataset split, i.e. resizes, cropping.")
     parser.add_argument("--dataset_name", required=True, help="Hugging Face dataset.")
     parser.add_argument("--output_dir", required=True, help="Output directory for the combined Dataset")
-    parser.add_argument("--map_function", default="resize_and_center_crop", help=f"One from {map_function_list}")
-    parser.add_argument("--width", default=512, help="Image width")
-    parser.add_argument("--height", default=512, help="Image height")
+    parser.add_argument(
+        "--map_function",
+        default="resize_and_center_crop",
+        help=f"One from {map_function_list} (default: resize_and_center_crop)",
+    )
+    parser.add_argument("--width", default=512, help="Image width (default: 512)")
+    parser.add_argument("--height", default=512, help="Image height (default: 512)")
     parser.add_argument("--dataset_split", default="test", help="The Split to select.")
     parser.add_argument("--max_shard_size", default="5GB", help="Maximum shard size when saving (default: 5GB)")
     parser.add_argument(
