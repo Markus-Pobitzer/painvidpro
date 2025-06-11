@@ -86,7 +86,7 @@ def main() -> None:
             num_shards={
                 "train": 2,
                 "test": 2,
-            },
+            },  # 2 shards needed then it is easier to load
             num_proc=num_proc,
         )
         dict_of_datasetdict["data"].save_to_disk(
