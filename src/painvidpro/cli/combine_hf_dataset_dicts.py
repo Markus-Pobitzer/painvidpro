@@ -12,7 +12,6 @@ def main():
     parser = argparse.ArgumentParser(description="Combine multiple Hugging Face DatasetDicts and save the result")
     parser.add_argument("--inputs", nargs="+", required=True, help="Paths to input DatasetDict directories")
     parser.add_argument("--output_dir", required=True, help="Output directory for the combined DatasetDict")
-    parser.add_argument("--max_shard_size", default="5GB", help="Maximum shard size when saving (default: 5GB)")
     parser.add_argument(
         "--num_proc",
         type=int,
@@ -39,7 +38,14 @@ def main():
 
     print("\n🚀 Saving combined dataset...")
     # Save combined dataset
-    combined.save_to_disk(args.output_dir, max_shard_size=args.max_shard_size, num_proc=args.num_proc)
+    combined.save_to_disk(
+        args.output_dir,
+        num_proc=args.num_proc,
+        num_shards={
+            "train": 20,
+            "test": 2,
+        },
+    )
     print(f"✅ Dataset saved to {args.output_dir}")
 
 
