@@ -1,4 +1,4 @@
-"""Exports the pipleine to a hugging face dataset, each frame of a video as a seperate entry."""
+"""Exports the pipleine to a hugging face dataset, an entry containing all frames, and meta data."""
 
 import logging
 import random
@@ -6,6 +6,7 @@ from os.path import join
 from pathlib import Path
 from typing import Any, Dict, Generator, List
 
+import numpy as np
 from datasets import Dataset, DatasetDict, Features, Sequence, Value
 from datasets import Image as ImageFeature
 from PIL import Image
@@ -30,32 +31,21 @@ def _get_features() -> Features:
             "art_genre": Sequence(Value("string")),
             "art_media": Sequence(Value("string")),
             "reference_frame": ImageFeature(),
-        }
-    )
-
-
-def _get_features_data() -> Features:
-    """Returns the Features of the data in the dataset."""
-    return Features(
-        {
-            "video_url": Value("string"),
-            "frame": ImageFeature(),
-            "frame_progress": Value("float32"),
+            "frame_list": Sequence(ImageFeature()),
+            "frame_progress_list": Sequence(Value("float32")),
         }
     )
 
 
 def generate_examples(
-    data_list: List[Dict[str, Any]], sample_ref_frame_variation: bool = False
+    data_list: List[Dict[str, Any]], max_num_frames: int = -1
 ) -> Generator[Dict[str, Any], None, None]:
     """
     Generates examples by loading images directly from video directories.
 
     Args:
         data_list: List with the entries as Dicts.
-        sample_ref_frame_variation: If set, randomly selects a reference frame
-            from the reference_frame_variations. If reference_frame_variations
-            is empty, falls back to reference_frame_name.
+        max_num_frames: If set to a vlue greater than 0, takes at most max_num_frames.
 
     Yields:
         Dict[str, Any]: A dictionary containing:
@@ -66,52 +56,27 @@ def generate_examples(
             - art_genre: Sequence of art genre
             - art_media: Sequence of art media
             - reference_frame: The reference frame image
-    """
-    for video in data_list:
-        video_dir = video["video_dir"]
-
-        try:
-            ref_frame_rel_path = video["reference_frame_name"]
-            if sample_ref_frame_variation and len(video["reference_frame_variations"]) > 0:
-                ref_frame_rel_path = random.sample(video["reference_frame_variations"], 1)[0]["path"]
-            reference_frame = Image.open(join(video_dir, ref_frame_rel_path))
-        except Exception as e:
-            logger.error(f"Error loading reference frame: {e}")
-            continue
-
-        yield {
-            "source": video["source"],
-            "video_url": video["video_url"],
-            "video_title": video["video_title"],
-            "art_style": video["art_style"],
-            "art_genre": video["art_genre"],
-            "art_media": video["art_media"],
-            "reference_frame": reference_frame,
-        }
-
-
-def generate_data_examples(data_list: List[Dict[str, Any]]) -> Generator[Dict[str, Any], None, None]:
-    """
-    Generates examples by loading images directly from video directories.
-
-    Args:
-        data_list: List with the entries as Dicts.
-
-    Yields:
-        Dict[str, Any]: A dictionary containing:
-            - video_url: The url of the video
-            - frame: The current frame image
-            - frame_progress: Progress through the video (0.0 to 1.0)
+            - frame_list: The frames from the video
+            - frame_progress_list: Progress corresponding to each frame (entry in 0.0 to 1.0)
     """
     for video in data_list:
         video_dir = video["video_dir"]
         video_path = Path(video_dir)
+
+        try:
+            ref_frame_rel_path = video["reference_frame_name"]
+            reference_frame = Image.open(join(video_dir, ref_frame_rel_path))
+        except Exception as e:
+            logger.error(f"Error loading reference frame: {e}")
+            continue
 
         # Process all frames for this video
         frames = video["extracted_frames"]
         start_frame = video["start_frame_idx"]
         end_frame = video["end_frame_idx"]
 
+        frame_list: List[Image.Image] = []
+        frame_progress_list: List[float] = []
         for frame_dict in frames:
             frame_idx = frame_dict.get("index", -1)
             frame_rel_path = frame_dict.get("path", "")
@@ -126,16 +91,32 @@ def generate_data_examples(data_list: List[Dict[str, Any]]) -> Generator[Dict[st
                 logger.error(f"Error loading frame {str(frame_path)}: {e}")
                 continue
             progress = max(0.0, min(frame_idx / (end_frame - start_frame), 1.0))
-            yield {
-                "video_url": video["video_url"],
-                "frame": frame_img,
-                "frame_progress": progress,
-            }
+            frame_list.append(frame_img)
+            frame_progress_list.append(progress)
+
+        if max_num_frames > 0 and len(frame_list) > max_num_frames:
+            idx = np.round(np.linspace(0, len(frame_list) - 1, max_num_frames)).astype(int)
+            frame_list = [frame_list[i] for i in idx]
+            frame_progress_list = [frame_progress_list[i] for i in idx]
+        yield {
+            "source": video["source"],
+            "video_url": video["video_url"],
+            "video_title": video["video_title"],
+            "art_style": video["art_style"],
+            "art_genre": video["art_genre"],
+            "art_media": video["art_media"],
+            "reference_frame": reference_frame,
+            "frame_list": frame_list,
+            "frame_progress_list": frame_progress_list,
+        }
 
 
-def export_video_as_entry_to_hf_dataset(
-    pipeline_path: str, train_split_size: float = 0.9, sample_ref_frame_variation: bool = False
-) -> Dict[str, DatasetDict]:
+def export_video_to_hf_dataset(
+    pipeline_path: str,
+    train_split_size: float = 0.9,
+    sample_ref_frame_variation: bool = False,
+    max_num_frames: int = -1,
+) -> DatasetDict:
     """Exports pipeline data directly into a Hugging Face DatasetDict.
 
     Args:
@@ -144,9 +125,10 @@ def export_video_as_entry_to_hf_dataset(
         sample_ref_frame_variation: If set, randomly selects a reference frame
             from the reference_frame_variations. If reference_frame_variations
             is empty, falls back to reference_frame_name.
+        max_num_frames: If set to a vlue greater than 0, takes at most max_num_frames.
 
     Returns:
-        A dict containing DatasetDicts.
+        A DatasetDicts.
     """
     pipe = Pipeline(base_dir=pipeline_path)
     video_list: List[Dict[str, Any]] = []
@@ -177,43 +159,22 @@ def export_video_as_entry_to_hf_dataset(
 
     # Define dataset features
     features = _get_features()
-    data_features = _get_features_data()
 
-    return {
-        "splits": DatasetDict(
-            {
-                "train": Dataset.from_generator(
-                    generate_examples,
-                    gen_kwargs={"data_list": train_data, "sample_ref_frame_variation": sample_ref_frame_variation},
-                    features=features,
-                    split="train",
-                    info=_get_dataset_info(),
-                ),
-                "test": Dataset.from_generator(
-                    generate_examples,
-                    gen_kwargs={"data_list": test_data, "sample_ref_frame_variation": sample_ref_frame_variation},
-                    features=features,
-                    split="test",
-                    info=_get_dataset_info(),
-                ),
-            }
-        ),
-        "data": DatasetDict(
-            {
-                "train_data": Dataset.from_generator(
-                    generate_data_examples,
-                    gen_kwargs={"data_list": train_data},
-                    features=data_features,
-                    split="train",
-                    info=_get_dataset_info(),
-                ),
-                "test_data": Dataset.from_generator(
-                    generate_data_examples,
-                    gen_kwargs={"data_list": test_data},
-                    features=data_features,
-                    split="test",
-                    info=_get_dataset_info(),
-                ),
-            }
-        ),
-    }
+    return DatasetDict(
+        {
+            "train": Dataset.from_generator(
+                generate_examples,
+                gen_kwargs={"data_list": train_data, "max_num_frames": max_num_frames},
+                features=features,
+                split="train",
+                info=_get_dataset_info(),
+            ),
+            "test": Dataset.from_generator(
+                generate_examples,
+                gen_kwargs={"data_list": test_data, "max_num_frames": max_num_frames},
+                features=features,
+                split="test",
+                info=_get_dataset_info(),
+            ),
+        }
+    )
