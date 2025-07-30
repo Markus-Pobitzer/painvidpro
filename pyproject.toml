@@ -26,7 +26,9 @@ dependencies = [
     "controlnet-aux==0.0.3",
     "datasets>=3.5.0",
     "gradio>=5.15.0",
-    "lightglue"
+    "lightglue",
+    "protobuf>=6.31.1",
+    "accelerate>=1.9.0",
 ]
 
 [tool.uv.sources]
