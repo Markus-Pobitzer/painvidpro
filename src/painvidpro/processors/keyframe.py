@@ -131,7 +131,16 @@ class ProcessorKeyframe(ProcessorBase):
                     url = metadata["id"]
                     video_format = self.params.get("yt_video_format", "bestvideo[height<=360]")
                     try:
-                        download_video(url, video_file_path, format=video_format)
+                        yt_dlp_retcode = download_video(url, video_file_path, format=video_format)
+                        if yt_dlp_retcode != 0:
+                            self.logger.info(
+                                (
+                                    " While downloading the video an error occured.\n"
+                                    " The used library for downloading is https://github.com/yt-dlp/yt-dlp\n"
+                                    f" The return code of yt-dlp was {yt_dlp_retcode}."
+                                )
+                            )
+                            return False
                     except Exception as e:
                         self.logger.info(
                             (
