@@ -3,6 +3,7 @@
 from typing import Any, Dict
 
 from painvidpro.processors.base import ProcessorBase
+from painvidpro.processors.flux_kontext import ProcessorFluxKontext
 from painvidpro.processors.keyframe import ProcessorKeyframe
 from painvidpro.processors.loomis_keyframe import ProcessorLoomisKeyframe
 from painvidpro.processors.loomis_matting import ProcessorLoomisMatting
@@ -40,6 +41,8 @@ class ProcessorsFactory:
             instance = ProcessorRealisticFrame()
         elif processor == "ProcessorRefFrameVariations":
             instance = ProcessorRefFrameVariations()
+        elif processor == "ProcessorFluxKontext":
+            instance = ProcessorFluxKontext()
         else:
             raise ValueError(f"Unknown processor: {processor}")
 
