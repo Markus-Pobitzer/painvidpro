@@ -87,6 +87,7 @@ class ProcessorFluxKontext(ProcessorKeyframe):
             "prompt": "Remove hand. Remove pencil.",
             "prompt_watermark": "Remove watermark",
             "prompt_lighting": "Flat lighting of the painting.",
+            "batch_size": 1,
         }
         self.params["remove_logos"] = False
         self.params["detect_keyframes"] = False
@@ -216,7 +217,6 @@ class ProcessorFluxKontext(ProcessorKeyframe):
         video_path: str,
         metadata: Dict[str, Any],
         num_frames: int = -1,
-        batch_size: int = 1,
         disable_tqdm: bool = True,
     ) -> bool:
         """Extracts frames from the video and stores them on disk.
@@ -255,7 +255,8 @@ class ProcessorFluxKontext(ProcessorKeyframe):
 
         try:
             self._flux_kontext_pipe = self.flux_kontext_pipe.to("cuda")
-            kontext_prompt = self.params["flux_kontext_config"]["prompt"]
+            batch_size = self.params["flux_kontext_config"].get("batch_size", 1)
+            kontext_prompt = self.params["flux_kontext_config"].get("prompt", "Remove hand. Remove pencil.")
             with video_capture_context(video_path=video_path) as cap:
                 # width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                 # height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -304,7 +305,7 @@ class ProcessorFluxKontext(ProcessorKeyframe):
                         pil_resize_with_padding(frame, target_size=(1024, 1024)) for frame in batch_frame_list
                     ]
                     kontext_image_list = self.flux_kontext_pipe(
-                        image=batch_finput_list, prompt=kontext_prompt, guidance_scale=2.5
+                        image=batch_finput_list, prompt=[kontext_prompt] * len(batch_finput_list), guidance_scale=2.5
                     ).images
                     # Crop and Resize to original image
                     kontext_image_list = [
@@ -350,9 +351,7 @@ class ProcessorFluxKontext(ProcessorKeyframe):
         combined_mask = sum_masks >= threshold
         return combined_mask
 
-    def _remove_logo(
-        self, video_dir: Path, metadata: Dict[str, Any], batch_size: int = 1, disable_tqdm: bool = True
-    ) -> bool:
+    def _remove_logo(self, video_dir: Path, metadata: Dict[str, Any], disable_tqdm: bool = True) -> bool:
         """Removes logos from extracted frames.
 
         Processes all frames listed in metadata's "extracted_frames" by using Flux-Kontext.
@@ -360,7 +359,6 @@ class ProcessorFluxKontext(ProcessorKeyframe):
         Args:
             video_dir: Directory containing extracted frames from video.
             metadata: Metadata as dict.
-            batch_size: Batch size to use.
             disable_tqdm: If True, disables progress bar visualization.
 
         Returns:
@@ -372,7 +370,8 @@ class ProcessorFluxKontext(ProcessorKeyframe):
 
         try:
             self._flux_kontext_pipe = self.flux_kontext_pipe.to("cuda")
-            kontext_prompt = self.params["flux_kontext_config"]["prompt_watermark"]
+            batch_size = self.params["flux_kontext_config"].get("batch_size", 1)
+            kontext_prompt = self.params["flux_kontext_config"].get("prompt_watermark", "Remove watermark")
             for batched_frame_entries in tqdm(
                 batch_list(extracted_frame_list, batch_size=batch_size),
                 desc="Removing logos and watermakrs",
@@ -381,9 +380,17 @@ class ProcessorFluxKontext(ProcessorKeyframe):
                 frame_path_list = [str(video_dir / entry["path"]) for entry in batched_frame_entries]
                 frame_list = [Image.open(frame_path) for frame_path in frame_path_list]
 
+                # Resize and pad to 1024x1024 pixels for better peroformance with Flux Kontext
+                batch_finput_list = [pil_resize_with_padding(frame, target_size=(1024, 1024)) for frame in frame_list]
                 kontext_image_list = self.flux_kontext_pipe(
-                    image=frame_list, prompt=kontext_prompt, guidance_scale=2.5
+                    image=batch_finput_list, prompt=[kontext_prompt] * len(batch_finput_list), guidance_scale=2.5
                 ).images
+                # Crop and Resize to original image
+                kontext_image_list = [
+                    pil_reverse_resize_with_padding(frame, og_frame.size)
+                    for frame, og_frame in zip(kontext_image_list, frame_list)
+                ]
+
                 for frame_path, kontext_image in zip(frame_path_list, kontext_image_list):
                     kontext_image.save(frame_path)
 
