@@ -13,7 +13,7 @@ def register_jsonl_files(base_dir: str, jsonl_files: List[str]) -> None:
         base_dir: Root directory for the pipeline data.
         jsonl_files: List of paths to .jsonl files to register.
     """
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s", force=True)
     logger = logging.getLogger(__name__)
 
     try:

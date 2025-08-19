@@ -1,6 +1,5 @@
 """Class for the Loomis Keyframe detection."""
 
-import logging
 import os
 from os.path import isfile
 from pathlib import Path
@@ -13,6 +12,7 @@ from diffusers import FluxKontextPipeline
 from PIL import Image
 from tqdm import tqdm
 
+from painvidpro.logging.logging import cleanup_logger, setup_logger
 from painvidpro.object_detection.factory import ObjectDetectionBase, ObjectDetectionFactory
 from painvidpro.processors.keyframe import ProcessorKeyframe
 from painvidpro.utils.image_processing import pil_resize_with_padding, pil_reverse_resize_with_padding
@@ -471,11 +471,8 @@ class ProcessorFluxKontext(ProcessorKeyframe):
         for i, vd in enumerate(video_dir_list):
             video_dir = Path(vd)
             log_file = str(video_dir / "ProcessorFluxKontext.log")
-            logging.basicConfig(
-                filename=log_file,
-                filemode="w",
-                force=True,
-            )
+            # Set log file path as name to make logger unique
+            self.logger = setup_logger(name=log_file, log_file=log_file)
             video_file_path = str(video_dir / self.video_file_name)
             reference_frame_path = str(video_dir / self.reference_frame_name)
 
@@ -486,7 +483,7 @@ class ProcessorFluxKontext(ProcessorKeyframe):
                 continue
 
             # Downloading the video
-            if not self._download_video(video_file_path=video_file_path, metadata=metadata):
+            if not self._download_video(video_dir=video_dir, video_file_path=video_file_path, metadata=metadata):
                 continue
 
             # Detecting start and end frame
@@ -531,11 +528,6 @@ class ProcessorFluxKontext(ProcessorKeyframe):
             metadata["processed"] = True
             save_metadata(video_dir=video_dir, metadata=metadata, metadata_name=self.metadata_name)
             ret[i] = True
-
-        # Clear file logging
-        logging.basicConfig(
-            filename=None,
-            force=True,
-        )
+            cleanup_logger(self.logger)
 
         return ret

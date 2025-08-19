@@ -154,7 +154,7 @@ class ProcessorLoomisMatting(ProcessorMatting):
                 continue
 
             # Downloading the video
-            if not self._download_video(video_file_path=video_file_path, metadata=metadata):
+            if not self._download_video(video_dir=video_dir, video_file_path=video_file_path, metadata=metadata):
                 continue
 
             # Detecting start and end frame

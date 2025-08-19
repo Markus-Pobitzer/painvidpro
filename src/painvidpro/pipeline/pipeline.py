@@ -3,13 +3,13 @@
 import copy
 import dataclasses
 import json
-import logging
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 from tqdm import tqdm
 
+from painvidpro.logging.logging import setup_logger
 from painvidpro.pipeline.input_file_format import VideoItem
 from painvidpro.processors.factory import ProcessorsFactory
 from painvidpro.utils.metadata import load_metadata, save_metadata
@@ -18,8 +18,7 @@ from painvidpro.video_processing.youtube import get_info_from_yt_url
 
 class Pipeline:
     def __init__(self, base_dir: str):
-        self.logger = logging.getLogger(__name__)
-        logging.basicConfig(level=logging.INFO)
+        self.logger = setup_logger(name=__name__)
         self.base_dir = Path(base_dir)
         self.youtube_dir = self.base_dir / "youtube"
         # Stores the video data
