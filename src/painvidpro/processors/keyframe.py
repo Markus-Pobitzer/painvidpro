@@ -114,10 +114,11 @@ class ProcessorKeyframe(ProcessorBase):
             "remove_videos_after_processing": False,
         }
 
-    def _download_video(self, video_file_path: str, metadata: Dict[str, Any]) -> bool:
+    def _download_video(self, video_dir: Path, video_file_path: str, metadata: Dict[str, Any]) -> bool:
         """Downloads the video if not alredy downloaded.
 
         Args:
+            video_dir: Path to the current video dir.
             video_file_path: Path to the video file on disk.
             metadata: Metadata as a dict.
 
@@ -158,6 +159,11 @@ class ProcessorKeyframe(ProcessorBase):
                         )
                     )
                     return False
+
+                # Reset that canvas was detected when the video gets downloaded.
+                if metadata.get("canvas_detected", False):
+                    metadata["canvas_detected"] = False
+                    save_metadata(video_dir, metadata_name=self.metadata_name, metadata=metadata)
         except Exception as e:
             self.logger.info(f" Failed downloading video to {video_file_path}: {e}")
             return False
@@ -179,6 +185,7 @@ class ProcessorKeyframe(ProcessorBase):
         """Detect start and end frame in the video if not already detected.
 
         Args:
+            video_dir: Path to the current video dir.
             video_file_path: Path to the video on disk.
             metadata: Metadata as a dict.
             batch_size: If > 0, then set the batch size of sequence detector
@@ -330,7 +337,7 @@ class ProcessorKeyframe(ProcessorBase):
                 continue
 
             # Downloading the video
-            if not self._download_video(video_file_path=video_file_path, metadata=metadata):
+            if not self._download_video(video_dir=video_dir, video_file_path=video_file_path, metadata=metadata):
                 continue
 
             # Detecting start and end frame
