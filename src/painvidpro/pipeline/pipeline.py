@@ -18,8 +18,8 @@ from painvidpro.video_processing.youtube import get_info_from_yt_url
 
 class Pipeline:
     def __init__(self, base_dir: str):
-        self.logger = logging.getLogger(__name__)
         logging.basicConfig(level=logging.INFO)
+        self.logger = logging.getLogger(__name__)
         self.base_dir = Path(base_dir)
         self.youtube_dir = self.base_dir / "youtube"
         # Stores the video data
