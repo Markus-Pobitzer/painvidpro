@@ -1,6 +1,5 @@
 """Class for the Keyframe detection."""
 
-import logging
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -10,6 +9,7 @@ import numpy as np
 
 from painvidpro.keyframe_detection.base import KeyframeDetectionBase
 from painvidpro.keyframe_detection.factory import KeyframeDetectionFactory
+from painvidpro.logging.logging import setup_logger
 from painvidpro.object_detection.base import ObjectDetectionBase
 from painvidpro.object_detection.factory import ObjectDetectionFactory
 from painvidpro.processors.base import ProcessorBase
@@ -25,12 +25,7 @@ class ProcessorKeyframe(ProcessorBase):
         """Class to process videos."""
         super().__init__()
         self.set_default_parameters()
-        self.logger = logging.getLogger(__name__)
-        logging.basicConfig(
-            level=logging.INFO,
-            format="%(asctime)s,%(msecs)03d %(name)s %(levelname)s %(message)s",
-            datefmt="%d-%m-%Y %H:%M:%S",
-        )
+        self.logger = setup_logger(name=__name__)
         self._sequence_detector: Optional[SequenceDetectionBase] = None
         self._keyframe_detector: Optional[KeyframeDetectionBase] = None
         self._keyframe_verifier: Optional[ObjectDetectionBase] = None

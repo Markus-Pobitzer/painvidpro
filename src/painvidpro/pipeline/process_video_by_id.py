@@ -1,6 +1,6 @@
 import argparse
-import logging
 
+from painvidpro.logging.logging import setup_logger
 from painvidpro.pipeline.pipeline import Pipeline
 
 
@@ -13,11 +13,8 @@ def main(base_dir: str, source: str, video_id: str) -> None:
         video_id: ID of the video to process
         batch_size: Optional batch size for processing
     """
-    # Set up basic logging configuration
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-
     try:
-        logger = logging.getLogger(__name__)
+        logger = setup_logger(__name__)
         logger.info(f"Initializing pipeline with base directory: {base_dir}")
 
         # Instantiate the pipeline
