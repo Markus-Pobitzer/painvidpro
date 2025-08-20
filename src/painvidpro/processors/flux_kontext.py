@@ -1,7 +1,7 @@
 """Class for the Loomis Keyframe detection."""
 
 import os
-from os.path import isfile
+from os.path import isfile, join
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -317,7 +317,7 @@ class ProcessorFluxKontext(ProcessorKeyframe):
                         frame_path = str(extr_frame_dir / frame_name)
                         kontext_image.save(frame_path)
                         ret_frame_idx.append(frame_idx)
-                        frame_paths.append(frame_path)
+                        frame_paths.append(join(self.extr_folder_name, frame_name))
 
             # Save extracted frames to metadata
             metadata_addition: List[Dict[str, Any]] = []
