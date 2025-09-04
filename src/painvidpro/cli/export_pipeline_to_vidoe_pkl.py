@@ -28,6 +28,12 @@ def parse_arguments() -> argparse.Namespace:
         default=-1,
         help=("If set to a vlue greater than 0, takes at most max_num_frames."),
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help=("Seed when the dataset gets split into train and test."),
+    )
 
     return parser.parse_args()
 
@@ -59,6 +65,7 @@ def main() -> None:
             output_dir=args.output_dir,
             train_split_size=args.train_split_size,
             max_num_frames=args.max_num_frames,
+            seed=args.seed,
         )
         print(f"✅ Dataset saved to {args.output_dir}")
 
