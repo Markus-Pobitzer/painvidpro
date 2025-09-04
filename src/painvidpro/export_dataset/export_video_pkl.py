@@ -7,7 +7,7 @@ import random
 from io import BytesIO
 from os.path import join
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 from PIL import Image
@@ -86,7 +86,7 @@ def export_to_directory(
     base_dir.mkdir(parents=True, exist_ok=True)
     metadata_path = base_dir / "metadata.csv"
 
-    with open(metadata_path, mode="w", newline="", encoding="utf-8") as csvfile:
+    with open(metadata_path, mode="a", newline="", encoding="utf-8") as csvfile:
         fieldnames = ["source", "video_url", "video_title", "art_style", "art_genre", "art_media"]
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
@@ -140,6 +140,7 @@ def export_video_to_pkl(
     train_split_size: float = 0.9,
     max_num_frames: int = -1,
     disable_tqdm: bool = False,
+    seed: Optional[int] = 42,
 ) -> None:
     """Exports pipeline data directly into a Hugging Face DatasetDict.
 
@@ -151,6 +152,7 @@ def export_video_to_pkl(
             from the reference_frame_variations. If reference_frame_variations
             is empty, falls back to reference_frame_name.
         max_num_frames: If set to a vlue greater than 0, takes at most max_num_frames.
+        seed: Sets the seed if not None.
 
     Returns:
         A DatasetDicts.
@@ -177,6 +179,8 @@ def export_video_to_pkl(
     logger.info(f"Found {len(video_list)} videos.")
 
     # Split dataset
+    if seed is not None:
+        random.seed(seed)
     random.shuffle(video_list)
     split_idx = int(len(video_list) * train_split_size)
     train_data = sorted(video_list[:split_idx], key=lambda x: x["identifier"])
