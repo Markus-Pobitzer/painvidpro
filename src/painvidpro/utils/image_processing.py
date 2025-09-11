@@ -4,7 +4,7 @@ from typing import List, Optional, Tuple, Union
 
 import cv2
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 
 
 def process_input(obj: Union[np.ndarray, str, cv2.VideoCapture], convert_bgr_to_rgb: bool = False) -> np.ndarray:
@@ -65,7 +65,7 @@ def convert_cv2_to_pil(img: np.ndarray) -> Image:
 def find_best_aspect_ratio(image_size: Tuple[int, int], size_list: List[Tuple[int, int]]) -> Optional[Tuple[int, int]]:
     """
     Find the best image size in size_list that preserves the
-    original image's aspect ratio the closests.
+    original image's aspect ratio the closest.
 
     Args:
         image_size: Original image dimensions (width, height).
@@ -155,9 +155,38 @@ def pil_resize_and_center_crop(image: Image.Image, resolution: int):
     return image
 
 
+def pil_resize(
+    image: Image.Image,
+    target_size: Tuple[int, int],
+    pad_input: bool = False,
+    padding_color: Union[str, int, Tuple[int, ...]] = "white",
+) -> Image.Image:
+    """Resizing it to the target size.
+
+    Args:
+        image: Input image to be processed.
+        target_size: Target size (width, height).
+        pad_input: If set resizes the image while keeping the aspect ratio and pads the unfilled part.
+        padding_color: The color for the padded pixels.
+
+    Returns:
+        The resized image
+    """
+    if pad_input:
+        # Resize image, keep aspect ratio
+        image = ImageOps.contain(image, size=target_size)
+        # Pad left side and bottom
+        image = ImageOps.pad(image, size=target_size, color=padding_color)
+    else:
+        image = image.resize(target_size)
+    return image
+
+
 def pil_resize_with_padding(img: Image.Image, target_size: Tuple[int, int] = (1024, 1024), padding_color: int = 0):
     """
     Resize the image to the target size while maintaining the aspect ratio, and pad the left or top with the specified color (default black) if necessary.
+
+    You can also call pil_resize(image=img, target_size=target_size, pad_input=True).
 
     The image is resized such that:
         - If the original image is larger than the target in either dimension, it is scaled down to fit within the target.
