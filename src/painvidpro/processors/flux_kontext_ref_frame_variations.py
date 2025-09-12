@@ -93,7 +93,6 @@ class ProcessorFluxKontextRefFrameVariations(ProcessorBase):
             "pencil": {
                 "realistic": "A realistic photograph of this pencil sketch.",
                 "oil": "An impressionistic oil painting of this pencil sketch.",
-                "acrylic": "An acrylic painting of this pencil sketch.",
             },
             "loomis_pencil": {
                 "realistic": "A realistic portrait photograph of this pencil sketch.",
