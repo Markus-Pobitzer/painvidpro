@@ -73,15 +73,17 @@ class ProcessorFluxKontextRefFrameVariations(ProcessorBase):
             (688, 1504),
             (720, 1456),
             (752, 1392),
-            (800, 1328),
+            (784, 1312),
             (832, 1248),
+            (800, 1280),
             (880, 1184),
             (944, 1104),
             (1024, 1024),
             (1104, 944),
             (1184, 880),
+            (1280, 800),
             (1248, 832),
-            (1328, 800),
+            (1312, 784),
             (1392, 752),
             (1456, 720),
             (1504, 688),
@@ -91,8 +93,9 @@ class ProcessorFluxKontextRefFrameVariations(ProcessorBase):
         self.params["art_media_to_var_prompt"] = {
             # Convert to pencil sketch with natural graphite lines, cross-hatching, and visible paper texture
             "pencil": {
-                "realistic": "A realistic photograph of this pencil sketch.",
-                "oil": "An impressionistic oil painting of this pencil sketch.",
+                # "realistic": "A realistic photograph of this pencil sketch.", # This could be used as augmentation
+                "realistic": "Hyper realistic painting",
+                "oil": "Oil painting",
             },
             "loomis_pencil": {
                 "realistic": "A realistic portrait photograph of this pencil sketch.",
