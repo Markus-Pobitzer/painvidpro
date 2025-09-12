@@ -2,10 +2,11 @@
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from PIL import Image
 
+from painvidpro.image_tagger.wd_tagger import Predictor
 from painvidpro.processors.realistic_frame import ProcessorRealisticFrame
 from painvidpro.utils.image_processing import find_best_aspect_ratio
 from painvidpro.utils.metadata import load_metadata, save_metadata
@@ -18,6 +19,18 @@ class ProcessorRefFrameVariations(ProcessorRealisticFrame):
         self.set_default_parameters()
         self.logger = logging.getLogger(__name__)
         self.zfill_num = 8
+        self._image_tagger: Optional[Predictor] = None
+
+    @property
+    def image_tagger(self) -> Predictor:
+        if self._image_tagger is None:
+            raise RuntimeError(
+                (
+                    "Iamge Tagger not correctly instanciated. Make sure to call "
+                    "set_parameters to laod the model first."
+                )
+            )
+        return self._image_tagger
 
     def set_parameters(self, params: Dict[str, Any]) -> Tuple[bool, str]:
         """Sets the parameters.
@@ -30,18 +43,33 @@ class ProcessorRefFrameVariations(ProcessorRealisticFrame):
             A string indidcating the error if the set up was not successfull.
         """
         ret, msg = super().set_parameters(params)
+        try:
+            if self.params["extend_prompt_with_tags"]:
+                self._image_tagger = Predictor()
+                self.image_tagger.load_model()
+        except Exception as e:
+            return False, f"An error occurred when loading the Image Tagger: {e}"
         return ret, msg
 
     def set_default_parameters(self):
         super().set_default_parameters()
-        self.params["prompt_list"] = [
-            "a real photo",
-            "an oil painting, masterpiece",
-            "a realistic acrylic painting, masterpiece",
-            "a pencil drawing",
-        ]
+        self.params["art_media_to_var_prompt"] = {
+            "default": {
+                "real": "a real photo",
+                "oil": "an oil painting, masterpiece",
+                "acrylic": "a realistic acrylic painting, masterpiece",
+                "pencil": "a pencil drawing",
+            },
+            "oil": {
+                "pencil": "pencil drawing with natural graphite lines, cross-hatching, and visible paper texture",
+            },
+            "acrylic": {
+                "pencil": "pencil drawing with natural graphite lines, cross-hatching, and visible paper texture",
+            },
+        }
         self.params["variations_dir"] = "reference_frame_variations"
         self.params["pad_input"] = True
+        self.params["extend_prompt_with_tags"] = True
 
     def _process(self, video_dir: Path, reference_frame_path: str) -> bool:
         """Processes a single reference frame to generate several version.
@@ -53,14 +81,9 @@ class ProcessorRefFrameVariations(ProcessorRealisticFrame):
         Returns:
             bool: True if processing was successful, False otherwise
         """
-        prompt_list = self.params.get("prompt_list", [])
         variations_dir = self.params.get("variations_dir", "reference_frame_variations")
         negative_prompt = self.params.get("negative_prompt", "")
         num_inference_steps = self.params.get("num_inference_steps", 30)
-
-        if len(prompt_list) == 0:
-            self.logger.info("Prompt list is empty, no images were generated.")
-            return False
 
         # Loading the metadata dict
         succ, metadata = load_metadata(video_dir, metadata_name=self.metadata_name)
@@ -75,12 +98,44 @@ class ProcessorRefFrameVariations(ProcessorRealisticFrame):
             return True
 
         # Load reference image
+        image_path = video_dir / reference_frame_path
         try:
-            image_path = video_dir / reference_frame_path
             image = Image.open(image_path)
         except Exception as e:
             self.logger.info(f"Failed to laod image {str(image_path)} with error: {e}")
             return False
+
+        # Get the prompt list
+        prompt_dict = self.params.get("art_media_to_var_prompt", {})
+        media_list = metadata["art_media"]
+        media = media_list[0] if len(media_list) > 0 else ""
+        media_prompt_dict = prompt_dict.get(media, {})
+        if len(media_prompt_dict.keys()) == 0:
+            self.logger.info(
+                f"No prompts specified for art media {media}, therefore no reference frame variations will be generated for {str(image_path)}"
+            )
+            return False
+        prompt_keys = []
+        prompt_list = []
+        for key, p in media_prompt_dict.items():
+            prompt_keys.append(key)
+            prompt_list.append(p)
+
+        if len(prompt_list) == 0:
+            self.logger.info("Prompt list is empty, no images were generated.")
+            return False
+
+        # Extend the prompt
+        if self.params["extend_prompt_with_tags"]:
+            sorted_general_strings, _, _, _ = self.image_tagger.predict(image)
+            tags = [
+                tag.strip()
+                for tag in sorted_general_strings.split(",")
+                if tag not in ["no humans"] and "media" not in tag and "medium" not in tag
+            ]
+            prompt_add = ", ".join(tags[:5])
+            if prompt_add != "":
+                prompt_list = [prompt + ", " + prompt_add for prompt in prompt_list]
 
         # Estimate best inference resolution
         width, height = image.size
@@ -105,6 +160,7 @@ class ProcessorRefFrameVariations(ProcessorRealisticFrame):
             variations_path.mkdir(parents=True, exist_ok=True)
 
             for index, prompt in enumerate(prompt_list):
+                key_name = prompt_keys[index]
                 # TODO: batch inference not supported yet
                 final_image = self.pipe(
                     prompt,
@@ -115,7 +171,7 @@ class ProcessorRefFrameVariations(ProcessorRealisticFrame):
                 ).images[0]
                 final_image = self._post_process_image(final_image, image_size=(width, height))
                 # Saving frame
-                final_frame_name = f"reference_frame_variation_{str(index).zfill(self.zfill_num)}.png"
+                final_frame_name = f"reference_frame_variation_{key_name}_{str(index).zfill(self.zfill_num)}.png"
                 out_path = str(variations_path / final_frame_name)
                 final_image.save(out_path)
                 metadata_entry_list.append(

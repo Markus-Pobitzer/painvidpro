@@ -68,14 +68,34 @@ class ProcessorFluxKontextRefFrameVariations(ProcessorBase):
         self.params["flux_kontext_config"] = {
             "batch_size": 1,
         }
-        self.params["model_size_list"] = [(1024, 1024)]
+        self.params["model_size_list"] = [
+            (672, 1568),
+            (688, 1504),
+            (720, 1456),
+            (752, 1392),
+            (784, 1312),
+            (832, 1248),
+            (800, 1280),
+            (880, 1184),
+            (944, 1104),
+            (1024, 1024),
+            (1104, 944),
+            (1184, 880),
+            (1280, 800),
+            (1248, 832),
+            (1312, 784),
+            (1392, 752),
+            (1456, 720),
+            (1504, 688),
+            (1568, 672),
+        ]
         # Define custom prompts for each art media
         self.params["art_media_to_var_prompt"] = {
             # Convert to pencil sketch with natural graphite lines, cross-hatching, and visible paper texture
             "pencil": {
-                "realistic": "A realistic photograph of this pencil sketch.",
-                "oil": "An impressionistic oil painting of this pencil sketch.",
-                "acrylic": "An acrylic painting of this pencil sketch.",
+                # "realistic": "A realistic photograph of this pencil sketch.", # This could be used as augmentation
+                "realistic": "Hyper realistic painting",
+                "oil": "Oil painting",
             },
             "loomis_pencil": {
                 "realistic": "A realistic portrait photograph of this pencil sketch.",
@@ -148,8 +168,7 @@ class ProcessorFluxKontextRefFrameVariations(ProcessorBase):
             variations_path.mkdir(parents=True, exist_ok=True)
             self._flux_kontext_pipe = self.flux_kontext_pipe.to("cuda")
             batch_size = self.params["flux_kontext_config"].get("batch_size", 1)
-            resized_image = pil_resize_with_padding(image, target_size=(1024, 1024))
-
+            resized_image = pil_resize_with_padding(image, target_size=best_resolution)
             media_list = metadata["art_media"]
             media = media_list[0] if len(media_list) > 0 else ""
             media_prompt_dict = prompt_dict.get(media, {})
@@ -174,7 +193,11 @@ class ProcessorFluxKontextRefFrameVariations(ProcessorBase):
             ):
                 batch_image_list = [resized_image] * len(batched_prompt_list)
                 kontext_image_list = self.flux_kontext_pipe(
-                    image=batch_image_list, prompt=batched_prompt_list, guidance_scale=2.5
+                    image=batch_image_list,
+                    prompt=batched_prompt_list,
+                    guidance_scale=2.5,
+                    width=best_resolution[0],
+                    height=best_resolution[1],
                 ).images
                 # Crop and Resize to original image
                 ref_image_list += [pil_reverse_resize_with_padding(frame, image.size) for frame in kontext_image_list]
