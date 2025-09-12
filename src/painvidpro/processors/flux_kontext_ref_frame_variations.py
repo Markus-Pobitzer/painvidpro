@@ -169,7 +169,6 @@ class ProcessorFluxKontextRefFrameVariations(ProcessorBase):
             self._flux_kontext_pipe = self.flux_kontext_pipe.to("cuda")
             batch_size = self.params["flux_kontext_config"].get("batch_size", 1)
             resized_image = pil_resize_with_padding(image, target_size=best_resolution)
-
             media_list = metadata["art_media"]
             media = media_list[0] if len(media_list) > 0 else ""
             media_prompt_dict = prompt_dict.get(media, {})
