@@ -98,21 +98,20 @@ class ProcessorFluxKontextRefFrameVariations(ProcessorBase):
                 "oil": "Oil painting",
             },
             "loomis_pencil": {
-                "realistic": "A realistic portrait photograph of this pencil sketch.",
-                "insta": "A realistic instagram portrait photo of this pencil sketch.",
-                "acrylic": "A realisitc acrylic portrait painting based on this pencil sketch.",
+                "realistic": "Portrait photograph",
+                "acrylic": "Hyper realisitc acrylic painting",
             },
             "oil": {
-                "realistic": "Transfer this painting into a realistic photograph, transformed into a breathtaking landscape photo. Use natural sunlight, dramatic sky, hyper-realistic details, and a shallow depth of field.",
-                "pencil": "Transfer this painting into a pencil sketch with natural graphite lines, cross-hatching, and visible paper texture.",
+                "realistic": "Make it real",
+                "pencil": "Hyper realistic pencil drawing",
             },
             "acrylic": {
-                "realistic": "A realistic photograph of this painting.",
-                "pencil": "A pencil drawing of this painting.",
+                "realistic": "Hyper realisitc painting",
+                "pencil": "A pencil drawing",
             },
         }
         self.params["variations_dir"] = "reference_frame_variations"
-        self.params["pad_input"] = True
+        self.params["pad_input"] = False
 
     def _process(self, video_dir: Path, reference_frame_path: str, disable_tqdm: bool = True) -> bool:
         """Processes a single reference frame to generate several version.
@@ -168,7 +167,12 @@ class ProcessorFluxKontextRefFrameVariations(ProcessorBase):
             variations_path.mkdir(parents=True, exist_ok=True)
             self._flux_kontext_pipe = self.flux_kontext_pipe.to("cuda")
             batch_size = self.params["flux_kontext_config"].get("batch_size", 1)
-            resized_image = pil_resize_with_padding(image, target_size=best_resolution)
+
+            if self.params["pad_input"]:
+                resized_image = pil_resize_with_padding(image, target_size=best_resolution)
+            else:
+                resized_image = image.resize(best_resolution)
+
             media_list = metadata["art_media"]
             media = media_list[0] if len(media_list) > 0 else ""
             media_prompt_dict = prompt_dict.get(media, {})
@@ -200,7 +204,12 @@ class ProcessorFluxKontextRefFrameVariations(ProcessorBase):
                     height=best_resolution[1],
                 ).images
                 # Crop and Resize to original image
-                ref_image_list += [pil_reverse_resize_with_padding(frame, image.size) for frame in kontext_image_list]
+                if self.params["pad_input"]:
+                    ref_image_list += [
+                        pil_reverse_resize_with_padding(frame, image.size) for frame in kontext_image_list
+                    ]
+                else:
+                    ref_image_list += [frame.resize(image.size) for frame in kontext_image_list]
 
             for index, (key_name, prompt, img) in enumerate(zip(prompt_keys, prompt_list, ref_image_list)):
                 # Saving frame

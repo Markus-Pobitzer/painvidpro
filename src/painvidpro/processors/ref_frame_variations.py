@@ -60,6 +60,11 @@ class ProcessorRefFrameVariations(ProcessorRealisticFrame):
                 "acrylic": "a realistic acrylic painting, masterpiece",
                 "pencil": "a pencil drawing",
             },
+            "pencil": {
+                # "realistic": "A realistic photograph of this pencil sketch.", # This could be used as augmentation
+                "realistic": "Hyper realistic painting",
+                "oil": "Oil painting",
+            },
             "oil": {
                 "pencil": "pencil drawing with natural graphite lines, cross-hatching, and visible paper texture",
             },
