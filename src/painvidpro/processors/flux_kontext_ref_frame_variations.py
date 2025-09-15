@@ -173,8 +173,11 @@ class ProcessorFluxKontextRefFrameVariations(ProcessorBase):
             else:
                 resized_image = image.resize(best_resolution)
 
-            media_list = metadata["art_media"]
+            # Get the prompt list
+            media_list = metadata.get("art_media", [])
             media = media_list[0] if len(media_list) > 0 else ""
+            if media == "pencil" and "loomis" in metadata.get("art_style", []):
+                media = "loomis_pencil"
             media_prompt_dict = prompt_dict.get(media, {})
             if len(media_prompt_dict.keys()) == 0:
                 self.logger.info(
