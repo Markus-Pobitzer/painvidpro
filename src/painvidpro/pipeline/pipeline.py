@@ -13,6 +13,7 @@ from painvidpro.logging.logging import setup_logger
 from painvidpro.pipeline.input_file_format import VideoItem
 from painvidpro.processors.factory import ProcessorsFactory
 from painvidpro.utils.metadata import load_metadata, save_metadata
+from painvidpro.utils.ref_frame_variations import clean_ref_frame_variations
 from painvidpro.video_processing.youtube import get_info_from_yt_url
 
 
@@ -220,3 +221,10 @@ class Pipeline:
                     processor_config=processor_config,
                     batch_size=batch_size,
                 )
+
+    def remove_ref_frame_variations(self):
+        """Removes all generated reference frame variations and updates the metadata json."""
+        for source in self.video_item_dict.keys():
+            for video_id in tqdm(self.video_item_dict[source].keys(), desc="Removing ref frame varaitions"):
+                video_path = self.base_dir / source / video_id
+                clean_ref_frame_variations(video_dir_list=[str(video_path)])
