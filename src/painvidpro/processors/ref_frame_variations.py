@@ -60,6 +60,9 @@ class ProcessorRefFrameVariations(ProcessorRealisticFrame):
                 "acrylic": "a realistic acrylic painting, masterpiece",
                 "pencil": "a pencil drawing",
             },
+            "loomis_pencil": {
+                "realistic": "a real photo",
+            },
             "pencil": {
                 # "realistic": "A realistic photograph of this pencil sketch.", # This could be used as augmentation
                 "realistic": "Hyper realistic painting",
@@ -112,8 +115,10 @@ class ProcessorRefFrameVariations(ProcessorRealisticFrame):
 
         # Get the prompt list
         prompt_dict = self.params.get("art_media_to_var_prompt", {})
-        media_list = metadata["art_media"]
+        media_list = metadata.get("art_media", [])
         media = media_list[0] if len(media_list) > 0 else ""
+        if media == "pencil" and "loomis" in metadata.get("art_style", []):
+            media = "loomis_pencil"
         media_prompt_dict = prompt_dict.get(media, {})
         if len(media_prompt_dict.keys()) == 0:
             self.logger.info(
@@ -136,7 +141,9 @@ class ProcessorRefFrameVariations(ProcessorRealisticFrame):
             tags = [
                 tag.strip()
                 for tag in sorted_general_strings.split(",")
-                if tag not in ["no humans"] and "media" not in tag and "medium" not in tag
+                if tag.strip() not in ["no humans", "monochrome", "greyscale"]
+                and "media" not in tag
+                and "medium" not in tag
             ]
             prompt_add = ", ".join(tags[:5])
             if prompt_add != "":
