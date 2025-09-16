@@ -4,10 +4,10 @@
 BASE_DIR="$1"
 
 PIPE_PATH_LIST=(
-    "$BASE_DIR""acrylic/acrylic"
-    "$BASE_DIR""loomis_portrait/loomis-portrai-rmbg"
-    "$BASE_DIR""oil/oil"
-    "$BASE_DIR""pencil_drawing/pencil_drawing"
+    "${BASE_DIR}/acrylic/acrylic"
+    "${BASE_DIR}/loomis_portrait/loomis-portrai-rmbg"
+    "${BASE_DIR}/oil/oil"
+    "${BASE_DIR}/pencil_drawing/pencil_drawing"
 )
 
 
