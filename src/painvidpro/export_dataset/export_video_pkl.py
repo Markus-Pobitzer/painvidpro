@@ -22,6 +22,39 @@ from painvidpro.utils.metadata import load_metadata
 logger = logging.getLogger(__name__)
 
 
+def prepare_reference_frame_variations(video: Dict[str, Any]) -> List[bytes]:
+    """
+    Loads reference frame variations.
+
+    Args:
+        video (Dict[str, Any]): Video data dictionary.
+
+    Returns:
+        List[bytes]: The reference frames if any.
+    """
+    video_dir = video["video_dir"]
+    video_path = Path(video_dir)
+
+    # Process all frames for this video
+    frames = video["reference_frame_variations"]
+
+    frame_data: List[bytes] = []
+    for frame_dict in frames:
+        frame_rel_path = frame_dict.get("path", "")
+        frame_path = video_path / frame_rel_path
+        try:
+            with Image.open(frame_path) as img:
+                # Save reference frame variations as PNG for better quality
+                buffer = BytesIO()
+                img.save(buffer, format="PNG")
+                compressed_frame = buffer.getvalue()
+        except Exception as e:
+            logger.error(f"Error loading frame {str(frame_path)}: {e}")
+            continue
+        frame_data.append(compressed_frame)
+    return frame_data
+
+
 def prepare_pickel_dataset(video: Dict[str, Any], max_num_frames: int = -1) -> Tuple[List[bytes], List[float]]:
     """
     Processes and compresses frames from a video.
@@ -111,6 +144,11 @@ def export_to_directory(
                 logger.error(f"Error loading reference frame: {e}")
                 continue
 
+            reference_frame_variations = prepare_reference_frame_variations(video)
+            # Save compressed frames
+            with open(join(video_out_dir, "ref_frame_variations_data.pkl"), "wb") as f:
+                pickle.dump(reference_frame_variations, f, protocol=pickle.HIGHEST_PROTOCOL)
+
             frame_data, frame_progress = prepare_pickel_dataset(video, max_num_frames=max_num_frames)
             if len(frame_data) <= 1:
                 logger.error(f"Only found {len(frame_data)} frames in {video_url}, that is not enough!")
@@ -148,9 +186,6 @@ def export_video_to_pkl(
         pipeline_path: Directory where the pipeline is stored.
         output_dir: Driectory to store the dataset.
         train_split_size: The size of the trainig data.
-        sample_ref_frame_variation: If set, randomly selects a reference frame
-            from the reference_frame_variations. If reference_frame_variations
-            is empty, falls back to reference_frame_name.
         max_num_frames: If set to a vlue greater than 0, takes at most max_num_frames.
         seed: Sets the seed if not None.
 

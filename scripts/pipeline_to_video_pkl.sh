@@ -1,14 +1,15 @@
 #!/bin/bash
 
 # Examlpe how several pipelines can be stored as a video_pkl dataset
+BASE_DIR="$1"
 
 PIPE_PATH_LIST=(
-    "/data/mpobitzer/datataset/acrylic/acrylic"
-    "/data/mpobitzer/datataset/loomis_portrait/loomis-portrai-rmbg"
-    "/data/mpobitzer/datataset/oil/oil"
-    "/data/mpobitzer/datataset/pencil_drawing/pencil_drawing"
+    "${BASE_DIR}/acrylic/acrylic"
+    "${BASE_DIR}/loomis_portrait/loomis-portrai-rmbg"
+    "${BASE_DIR}/oil/oil"
+    "${BASE_DIR}/pencil_drawing/pencil_drawing"
 )
-OUT_DIR="/data/mpobitzer/datataset/video_as_pkl_combined"
+OUT_DIR="${BASE_DIR}/video_as_pkl_combined"
 SEED=42
 
 # Make sure to remove stale dataset
