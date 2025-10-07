@@ -13,6 +13,7 @@ from painvidpro.logging.logging import setup_logger
 from painvidpro.pipeline.input_file_format import VideoItem
 from painvidpro.processors.factory import ProcessorsFactory
 from painvidpro.utils.metadata import load_metadata, save_metadata
+from painvidpro.utils.ref_frame_tags import clean_ref_frame_tags
 from painvidpro.utils.ref_frame_variations import clean_ref_frame_variations
 from painvidpro.video_processing.youtube import get_info_from_yt_url
 
@@ -212,15 +213,15 @@ class Pipeline:
             processor_config: The configuration for the processor.
             batch_size: Gets propgaed to the processor.
         """
+        processor = ProcessorsFactory().build(processor_name, processor_config)
+
         for source in self.video_item_dict.keys():
             for video_id in tqdm(self.video_item_dict[source].keys(), desc="Processing video"):
-                self.process_video_by_id_overwrite_processor(
-                    source=source,
-                    video_id=video_id,
-                    processor_name=processor_name,
-                    processor_config=processor_config,
-                    batch_size=batch_size,
-                )
+                if source == "youtube":
+                    video_dir = self.youtube_dir / self.video_item_dict[source][video_id]["url"]
+                    processor.process([video_dir], batch_size=batch_size)
+                else:
+                    self.logger.info(f"Processing for source {source} is not supported.")
 
     def remove_ref_frame_variations(self):
         """Removes all generated reference frame variations and updates the metadata json."""
@@ -228,3 +229,10 @@ class Pipeline:
             for video_id in tqdm(self.video_item_dict[source].keys(), desc="Removing ref frame varaitions"):
                 video_path = self.base_dir / source / video_id
                 clean_ref_frame_variations(video_dir_list=[str(video_path)])
+
+    def remove_ref_frame_tags(self):
+        """Removes all generated tags for the reference frame and update the metadata json."""
+        for source in self.video_item_dict.keys():
+            for video_id in tqdm(self.video_item_dict[source].keys(), desc="Removing ref frame tags"):
+                video_path = self.base_dir / source / video_id
+                clean_ref_frame_tags(video_dir_list=[str(video_path)])

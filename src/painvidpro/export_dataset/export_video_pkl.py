@@ -160,6 +160,12 @@ def export_to_directory(
             with open(join(video_out_dir, "frame_progress.pkl"), "wb") as f:
                 pickle.dump(frame_progress, f, protocol=pickle.HIGHEST_PROTOCOL)
 
+            # Save image tags if present
+            if video["reference_frame_tags"] is not None:
+                reference_frame_tags = [rft["tag"] for rft in video["reference_frame_tags"] if "tag" in rft]
+                with open(join(video_out_dir, "reference_frame_tags.pkl"), "wb") as f:
+                    pickle.dump(reference_frame_tags, f, protocol=pickle.HIGHEST_PROTOCOL)
+
             writer.writerow(
                 {
                     "source": source,
