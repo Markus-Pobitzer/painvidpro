@@ -20,12 +20,20 @@ def main():
         action="store_true",
         help=("If set, removes the previous generated ref frames if any."),
     )
+    parser.add_argument(
+        "--remove_previous_ref_tags",
+        action="store_true",
+        help=("If set, removes the previous generated ref tags if any."),
+    )
     args = parser.parse_args()
 
     pipeline = Pipeline(args.base_dir)
 
     if args.remove_previous_ref_frames:
         pipeline.remove_ref_frame_variations()
+
+    if args.remove_previous_ref_tags:
+        pipeline.remove_ref_frame_tags()
 
     pipeline.process_overwrite_processor(
         processor_name=args.processor_name,
