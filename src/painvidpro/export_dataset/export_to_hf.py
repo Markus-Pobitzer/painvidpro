@@ -63,6 +63,7 @@ def prepare_data(
         "end_frame_idx": end_frame,
         "reference_frame_name": metadata.get("reference_frame_name", "reference_frame.png"),
         "reference_frame_variations": metadata.get("reference_frame_variations", []),
+        "reference_frame_tags": metadata.get("reference_frame_tags", []),
         "extracted_frames": extracted_frames,
         # These get saved for every frame
         "source": source,

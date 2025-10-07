@@ -123,7 +123,7 @@ class ProcessorRefFrameTagging(ProcessorBase):
             tag = tag_dict["image_description"]
             tag_entry = {
                 "prompt": prompt,
-                "model": self.params.get("model", ""),
+                "image_tagger": self.params.get("image_tagger", ""),
                 "processor": self.__class__.__name__,
                 "tag": tag,
             }
@@ -133,7 +133,7 @@ class ProcessorRefFrameTagging(ProcessorBase):
             return False
 
         # Save entries in metadata
-        metadata["reference_frame_tags"] = metadata.get("reference_frame_tags", []).append(tag_entry)
+        metadata["reference_frame_tags"] = metadata.get("reference_frame_tags", []) + [tag_entry]
         save_metadata(video_dir=video_dir, metadata=metadata, metadata_name=self.metadata_name)
         return True
 
