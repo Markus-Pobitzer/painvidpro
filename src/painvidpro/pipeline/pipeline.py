@@ -212,15 +212,15 @@ class Pipeline:
             processor_config: The configuration for the processor.
             batch_size: Gets propgaed to the processor.
         """
+        processor = ProcessorsFactory().build(processor_name, processor_config)
+
         for source in self.video_item_dict.keys():
             for video_id in tqdm(self.video_item_dict[source].keys(), desc="Processing video"):
-                self.process_video_by_id_overwrite_processor(
-                    source=source,
-                    video_id=video_id,
-                    processor_name=processor_name,
-                    processor_config=processor_config,
-                    batch_size=batch_size,
-                )
+                if source == "youtube":
+                    video_dir = self.youtube_dir / self.video_item_dict[source][video_id]["url"]
+                    processor.process([video_dir], batch_size=batch_size)
+                else:
+                    self.logger.info(f"Processing for source {source} is not supported.")
 
     def remove_ref_frame_variations(self):
         """Removes all generated reference frame variations and updates the metadata json."""

@@ -9,6 +9,7 @@ from painvidpro.processors.loomis_keyframe import ProcessorLoomisKeyframe
 from painvidpro.processors.loomis_matting import ProcessorLoomisMatting
 from painvidpro.processors.matting import ProcessorMatting
 from painvidpro.processors.realistic_frame import ProcessorRealisticFrame
+from painvidpro.processors.ref_frame_tagging import ProcessorRefFrameTagging
 from painvidpro.processors.ref_frame_variations import ProcessorRefFrameVariations
 
 
@@ -39,6 +40,8 @@ class ProcessorsFactory:
             instance = ProcessorLoomisMatting()
         elif processor == "ProcessorRealisticFrame":
             instance = ProcessorRealisticFrame()
+        elif processor == "ProcessorRefFrameTagging":
+            instance = ProcessorRefFrameTagging()
         elif processor == "ProcessorRefFrameVariations":
             instance = ProcessorRefFrameVariations()
         elif processor == "ProcessorFluxKontext":
