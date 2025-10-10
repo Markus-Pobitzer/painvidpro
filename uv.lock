@@ -518,10 +518,11 @@ wheels = [
 
 [[package]]
 name = "diffusers"
-version = "0.35.0"
-source = { registry = "https://pypi.org/simple" }
+version = "0.36.0.dev0"
+source = { git = "https://github.com/huggingface/diffusers.git#8abc7aeb715c0149ee0a9982b2d608ce97f55215" }
 dependencies = [
     { name = "filelock" },
+    { name = "httpx" },
     { name = "huggingface-hub" },
     { name = "importlib-metadata" },
     { name = "numpy" },
@@ -529,10 +530,6 @@ dependencies = [
     { name = "regex" },
     { name = "requests" },
     { name = "safetensors" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/ad/22/e5144a0c1c5245e067ec2cf180b4a559dab28035f7be586cfa8a10e24a34/diffusers-0.35.0.tar.gz", hash = "sha256:7b1d77a8e01ab866e13088e56691608e0fbde551758459a286caa7a36cadb488", size = 3369429, upload-time = "2025-08-19T03:22:13.88Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d3/f0/218ee7e36ecfa9ae5ff32a12a1f8ab52def299937bf4ef069bad6c6e79d7/diffusers-0.35.0-py3-none-any.whl", hash = "sha256:5283349ffcd9c6465cf41c2277d4e02e817ad87e08522b50623fb0075849817e", size = 4121789, upload-time = "2025-08-19T03:22:11.351Z" },
 ]
 
 [[package]]
@@ -1721,7 +1718,7 @@ requires-dist = [
     { name = "bottleneck", specifier = ">=1.4.2" },
     { name = "controlnet-aux", specifier = "==0.0.3" },
     { name = "datasets", specifier = ">=3.5.0" },
-    { name = "diffusers", specifier = ">=0.35" },
+    { name = "diffusers", git = "https://github.com/huggingface/diffusers.git" },
     { name = "easyocr", specifier = ">=1.7.2" },
     { name = "ffmpeg-python", specifier = ">=0.2.0" },
     { name = "gradio", specifier = ">=5.15.0" },
