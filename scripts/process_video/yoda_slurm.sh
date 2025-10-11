@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH -A staff
 #SBATCH -J process_video
-#SBATCH -t 03:00:00              # Max runtime 3 hours
+#SBATCH -t 24:00:00              # Max runtime 24 hours
 #SBATCH --gres=gpu:1             # Request 1 GPU
 #SBATCH -N 1                     # Use 1 node
-#SBATCH --cpus-per-task=4        # 4 CPU cores per task
-#SBATCH --mem=8G                 # 8GB memory
+#SBATCH --cpus-per-task=6        # 6 CPU cores per task
+#SBATCH --mem=24G                # 24GB memory
 #SBATCH -o slurm_log/slurm-%j.out
 #SBATCH -e slurm_log/slurm-%j.err
 

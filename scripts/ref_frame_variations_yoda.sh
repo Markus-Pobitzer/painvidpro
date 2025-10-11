@@ -10,9 +10,18 @@ PIPE_PATH_LIST=(
     "${BASE_DIR}/pencil_drawing/pencil_drawing"
 )
 
+PROCESSOR_LIST=(
+    "ProcessorQwenEditRefFrameVariations"
+    "ProcessorRefFrameVariations"
+    "ProcessorQwenEditRefFrameVariations"
+    "ProcessorQwenEditRefFrameVariations"
+)
 
-# Iterate over each pipeline path
-for PIPE_PATH in "${PIPE_PATH_LIST[@]}"; do
-    echo "Working on $PIPE_PATH"
-    sbatch scripts/process_video/ref_frame_variations_yoda_slurm.sh "$PIPE_PATH" "ProcessorRefFrameVariations"
+
+# Iterate over each pipeline path with index
+for i in "${!PIPE_PATH_LIST[@]}"; do
+    PIPE_PATH="${PIPE_PATH_LIST[$i]}"
+    PROCESSOR="${PROCESSOR_LIST[$i]}"
+    echo "Working on $PIPE_PATH with processor $PROCESSOR"
+    sbatch scripts/process_video/ref_frame_variations_yoda_slurm.sh "$PIPE_PATH" "$PROCESSOR"
 done

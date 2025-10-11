@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH -A staff
 #SBATCH -J ref_frame
-#SBATCH -t 09:00:00
+#SBATCH -t 24:00:00
 #SBATCH --gres=gpu:1
 #SBATCH -N 1                     # Use 1 node
 #SBATCH --cpus-per-task=4        # 4 CPU cores per task
@@ -27,7 +27,8 @@ echo "Processing pipeline" "$PIPE_PATH" "with processor" "$PROC_NAME"
 python -m painvidpro.cli.create_ref_frames_for_pipeline \
     --base_dir "$BASE_DIR" \
     --processor_name "$PROC_NAME" \
-    --remove_previous_ref_frames
+    --remove_previous_ref_frames \
+    --enable_sequential_cpu_offload
 
 # Exit with status from python command
 exit $?
