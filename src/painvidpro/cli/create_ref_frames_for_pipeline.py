@@ -25,6 +25,11 @@ def main():
         action="store_true",
         help=("If set, removes the previous generated ref tags if any."),
     )
+    parser.add_argument(
+        "--enable_sequential_cpu_offload",
+        action="store_true",
+        help=("Sets enable_sequential_cpu_offload=True in the processors config."),
+    )
     args = parser.parse_args()
 
     pipeline = Pipeline(args.base_dir)
@@ -35,9 +40,12 @@ def main():
     if args.remove_previous_ref_tags:
         pipeline.remove_ref_frame_tags()
 
+    processor_config = {}
+    if args.enable_sequential_cpu_offload:
+        processor_config["enable_sequential_cpu_offload"] = True
     pipeline.process_overwrite_processor(
         processor_name=args.processor_name,
-        processor_config={},  # Using default
+        processor_config=processor_config,  # Using default
     )
 
 
