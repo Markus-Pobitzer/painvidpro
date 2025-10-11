@@ -202,7 +202,13 @@ class Pipeline:
                 if not video_metadata["processed"]:
                     self.process_video(video_data=self.video_item_dict[source][video_id], batch_size=batch_size)
 
-    def process_overwrite_processor(self, processor_name: str, processor_config: Dict[str, Any], batch_size: int = -1):
+    def process_overwrite_processor(
+        self,
+        processor_name: str,
+        processor_config: Dict[str, Any],
+        batch_size: int = -1,
+        skip_excluded_videos: bool = True,
+    ):
         """Processes all video entries in the Pipeline with the specified processor.
 
         Please note that this is not the intended way to process the pipeline entries
@@ -212,6 +218,8 @@ class Pipeline:
             processor_name: The name of the porceossor.
             processor_config: The configuration for the processor.
             batch_size: Gets propgaed to the processor.
+            skip_excluded_videos: If set, checks if the `exclude_video` in the
+                video_metadata is set and skips it.
         """
         processor = ProcessorsFactory().build(processor_name, processor_config)
 
@@ -219,6 +227,10 @@ class Pipeline:
             for video_id in tqdm(self.video_item_dict[source].keys(), desc="Processing video"):
                 if source == "youtube":
                     video_dir = self.youtube_dir / self.video_item_dict[source][video_id]["url"]
+                    _, video_metadata = load_metadata(video_dir=video_dir)
+                    if skip_excluded_videos and video_metadata.get("exclude_video", False):
+                        self.logger.info(f"Skipping processing of {video_dir}, exclude_video is set in metadata.")
+                        continue
                     processor.process([video_dir], batch_size=batch_size)
                 else:
                     self.logger.info(f"Processing for source {source} is not supported.")
