@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Activate venv if not already
+source .venv/bin/activate
+
 # Examlpe how several pipelines can be stored as a video_pkl dataset
 BASE_DIR="$1"
 
