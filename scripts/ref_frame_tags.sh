@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Activate venv if not already
+source .venv/bin/activate
+
 # Generates reference frame varaitions
 BASE_DIR="$1"
 
