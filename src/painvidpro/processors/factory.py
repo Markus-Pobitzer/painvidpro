@@ -9,6 +9,7 @@ from painvidpro.processors.loomis_keyframe import ProcessorLoomisKeyframe
 from painvidpro.processors.loomis_matting import ProcessorLoomisMatting
 from painvidpro.processors.matting import ProcessorMatting
 from painvidpro.processors.qwen_edit_ref_frame_variations import ProcessorQwenEditRefFrameVariations
+from painvidpro.processors.qwen_image_generation import ProcessorQwenImageGeneration
 from painvidpro.processors.realistic_frame import ProcessorRealisticFrame
 from painvidpro.processors.ref_frame_tagging import ProcessorRefFrameTagging
 from painvidpro.processors.ref_frame_variations import ProcessorRefFrameVariations
@@ -49,6 +50,8 @@ class ProcessorsFactory:
             instance = ProcessorFluxKontext()
         elif processor == "ProcessorQwenEditRefFrameVariations":
             instance = ProcessorQwenEditRefFrameVariations()
+        elif processor == "ProcessorQwenImageGeneration":
+            instance = ProcessorQwenImageGeneration()
         else:
             raise ValueError(f"Unknown processor: {processor}")
 
