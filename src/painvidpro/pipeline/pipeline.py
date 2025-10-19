@@ -289,7 +289,7 @@ class Pipeline:
 
         for source in self.video_item_dict.keys():
             for video_id in tqdm(self.video_item_dict[source].keys(), desc="Processing video"):
-                video_dir = self.youtube_dir / video_id
+                video_dir = (self.base_dir / source) / video_id
                 succ, video_metadata = load_metadata(video_dir=video_dir)
                 if not succ:
                     self.logger.info(
