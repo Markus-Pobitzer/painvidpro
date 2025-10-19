@@ -110,7 +110,7 @@ class Pipeline:
         # url is used to store the prompt
         prompt = video_item.url
         # As id we use the hash of the prompt to make each entry unique
-        video_id = short_hash(prompt, length=6)
+        video_id = short_hash(prompt, length=11)
         if video_id in self.video_item_dict["generated"]:
             self.logger.info(f"Skipping video entry with prompt {prompt}, already in pipeline!")
             return False, "Video already registered"
@@ -122,13 +122,21 @@ class Pipeline:
             "id": video_id,
             "titel": prompt,
             "license": "",
-            "channel": video_item.channel_ids,
-            "channel_id": video_item.channel_ids,
+            "channel": video_item.channel_ids[0],
+            "channel_id": video_item.channel_ids[0],
         }
         metadata["art_style"] = video_item.art_style
         metadata["art_genre"] = video_item.art_genre
         metadata["art_media"] = video_item.art_media
         metadata["processed"] = False
+        metadata["reference_frame_tags"] = [
+            {
+                "prompt": "",  # Prompt to generate the tag for the image
+                "image_tagger": video_item.channel_ids[0],
+                "processor": "",
+                "tag": prompt,
+            }
+        ]
         save_metadata(video_dir=video_dir, metadata=metadata)
         # Shallow copy of video_item to overwrite url
         entry = dataclasses.replace(video_item)
