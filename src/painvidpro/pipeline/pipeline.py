@@ -5,13 +5,14 @@ import dataclasses
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from tqdm import tqdm
 
 from painvidpro.logging.logging import setup_logger
 from painvidpro.pipeline.input_file_format import VideoItem
 from painvidpro.processors.factory import ProcessorsFactory
+from painvidpro.utils.hash_helper import short_hash
 from painvidpro.utils.metadata import load_metadata, save_metadata
 from painvidpro.utils.ref_frame_tags import clean_ref_frame_tags
 from painvidpro.utils.ref_frame_variations import clean_ref_frame_variations
@@ -23,6 +24,7 @@ class Pipeline:
         self.logger = setup_logger(name=__name__)
         self.base_dir = Path(base_dir)
         self.youtube_dir = self.base_dir / "youtube"
+        self.generated_dir = self.base_dir / "generated"
         # Stores the video data
         self.video_item_dict: Dict[str, Dict[str, Dict[str, Any]]]
         self.save_file = "pipeline.json"
@@ -32,6 +34,7 @@ class Pipeline:
     def _ensure_dirs(self) -> None:
         self.base_dir.mkdir(parents=True, exist_ok=True)
         self.youtube_dir.mkdir(parents=True, exist_ok=True)
+        self.generated_dir.mkdir(parents=True, exist_ok=True)
 
     def save(self) -> None:
         """Save pipeline state to JSON"""
@@ -47,7 +50,7 @@ class Pipeline:
                 data = json.load(f)
             self.video_item_dict = data["video_item_dict"]
         else:
-            self.video_item_dict = {"youtube": {}}
+            self.video_item_dict = {"youtube": {}, "generated": {}}
             self.save()
 
     def register_youtube_video_input(self, video_item: VideoItem) -> Tuple[bool, List[str]]:
@@ -79,7 +82,7 @@ class Pipeline:
             else:
                 video_dir = self.youtube_dir / video_id
                 video_dir.mkdir(parents=True, exist_ok=True)
-                # Metadata is jsut a dict at the moment
+                # Metadata is just a dict at the moment
                 metadata = video_data
                 metadata["art_style"] = video_item.art_style
                 metadata["art_genre"] = video_item.art_genre
@@ -92,6 +95,46 @@ class Pipeline:
                 self.video_item_dict["youtube"][video_id] = dataclasses.asdict(entry)
                 ret.append(str(video_dir))
         return True, ret
+
+    def register_generated_video_input(self, video_item: VideoItem) -> Tuple[bool, str]:
+        """Registers a generated video input and updates the video item dictionary.
+
+        Args:
+            video_item: An instance of VideoItem containing details about the generated entry.
+
+        Returns:
+            A tuple where the first element is a boolean indicating success, and the second
+            element is a string with the path to the registered video directory
+            or error messages.
+        """
+        # url is used to store the prompt
+        prompt = video_item.url
+        # As id we use the hash of the prompt to make each entry unique
+        video_id = short_hash(prompt, length=6)
+        if video_id in self.video_item_dict["generated"]:
+            self.logger.info(f"Skipping video entry with prompt {prompt}, already in pipeline!")
+            return False, "Video already registered"
+        video_dir = self.generated_dir / video_id
+        video_dir.mkdir(parents=True, exist_ok=True)
+        # Metadata is just a dict at the moment
+        # "id", "title", "license", "channel", "channel_id"
+        metadata: Dict[str, Any] = {
+            "id": video_id,
+            "titel": prompt,
+            "license": "",
+            "channel": video_item.channel_ids,
+            "channel_id": video_item.channel_ids,
+        }
+        metadata["art_style"] = video_item.art_style
+        metadata["art_genre"] = video_item.art_genre
+        metadata["art_media"] = video_item.art_media
+        metadata["processed"] = False
+        save_metadata(video_dir=video_dir, metadata=metadata)
+        # Shallow copy of video_item to overwrite url
+        entry = dataclasses.replace(video_item)
+        entry.url = video_id
+        self.video_item_dict["generated"][video_id] = dataclasses.asdict(entry)
+        return True, str(video_dir)
 
     def register_video_input(self, video_input_file: str) -> List[str]:
         """Register a video input file and updates the video item dictionary.
@@ -120,6 +163,14 @@ class Pipeline:
                             f"The occurred problem: {msg_list[0]}."
                         )
                     )
+            elif vi.source == "generated":
+                succ, msg = self.register_generated_video_input(vi)
+                if succ:
+                    ret.append(msg)
+                else:
+                    self.logger.info(
+                        (f"Was not successfull in registering Video Item {vi}." f"The occurred problem: {msg}.")
+                    )
             else:
                 self.logger.info(f"No support for source {vi.source} in Video Item {vi}.")
         self.save()
@@ -128,8 +179,13 @@ class Pipeline:
     def process_video(self, video_data: Dict[str, Any], batch_size: int = -1):
         """Applies the processor onto a video item."""
         source = video_data["source"]
+        video_dir: Optional[Path] = None
         if source == "youtube":
             video_dir = self.youtube_dir / video_data["url"]
+        elif source == "generated":
+            video_dir = self.generated_dir / video_data["url"]
+
+        if video_dir is not None:
             for processor in video_data["video_processor"]:
                 processor = ProcessorsFactory().build(processor["name"], processor["config"])
                 processor.process([video_dir], batch_size=batch_size)
@@ -225,15 +281,17 @@ class Pipeline:
 
         for source in self.video_item_dict.keys():
             for video_id in tqdm(self.video_item_dict[source].keys(), desc="Processing video"):
-                if source == "youtube":
-                    video_dir = self.youtube_dir / self.video_item_dict[source][video_id]["url"]
-                    _, video_metadata = load_metadata(video_dir=video_dir)
-                    if skip_excluded_videos and video_metadata.get("exclude_video", False):
-                        self.logger.info(f"Skipping processing of {video_dir}, exclude_video is set in metadata.")
-                        continue
-                    processor.process([video_dir], batch_size=batch_size)
-                else:
-                    self.logger.info(f"Processing for source {source} is not supported.")
+                video_dir = self.youtube_dir / video_id
+                succ, video_metadata = load_metadata(video_dir=video_dir)
+                if not succ:
+                    self.logger.info(
+                        f"Was not able to load metadata for video_dir {str(video_dir)}, skipping processing!"
+                    )
+                    continue
+                if skip_excluded_videos and video_metadata.get("exclude_video", False):
+                    self.logger.info(f"Skipping processing of {video_dir}, exclude_video is set in metadata.")
+                    continue
+                processor.process([video_dir], batch_size=batch_size)
 
     def remove_ref_frame_variations(self):
         """Removes all generated reference frame variations and updates the metadata json."""
