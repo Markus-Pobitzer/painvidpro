@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH -N 1                     # Use 1 node
 #SBATCH --cpus-per-task=4        # 4 CPU cores per task
-#SBATCH --mem=8G                 # 8GB memory
+#SBATCH --mem=32G                # 32GB memory
 #SBATCH -o slurm_log/slurm-%j.out
 #SBATCH -e slurm_log/slurm-%j.err
 

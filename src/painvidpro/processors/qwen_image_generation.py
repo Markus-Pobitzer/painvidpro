@@ -103,9 +103,7 @@ class ProcessorQwenImageGeneration(ProcessorBase):
         self.params["qwen_algorithm"] = "Qwen/Qwen-Image"
         self.params["qwen_config"] = {"batch_size": 1}
         self.params["qwen_lightning_lora"] = "lightx2v/Qwen-Image-Lightning"
-        self.params["qwen_lightning_lora_weight_name"] = (
-            "Qwen-Image-Lightning/Qwen-Image-Lightning-8steps-V2.0.safetensors"
-        )
+        self.params["qwen_lightning_lora_weight_name"] = "Qwen-Image-Lightning-8steps-V2.0.safetensors"
 
         self.params["enable_sequential_cpu_offload"] = False
         self.params["device"] = "cuda"
