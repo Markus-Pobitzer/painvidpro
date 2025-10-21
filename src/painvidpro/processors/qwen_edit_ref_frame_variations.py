@@ -156,6 +156,11 @@ class ProcessorQwenEditRefFrameVariations(ProcessorBase):
                 # "paintlane": "Convert the image into a simple monochrome pencil drawing in the style of PAINTLANE: clean outlines, minimal shading, no color, beginner-friendly, clear and recognizable forms.",
                 # "outlines": "Convert the image to a black-and-white pencil sketch showing only the outlines of objects with simple, light shading.",
             },
+            "cubism": {
+                "monochrome": "Remove all unnatural lines, remove the abstract stlye, to pencil painting, monochrome",
+                "color_pencil": "Remove all unnatural lines, remove the abstract stlye, to childish pencil drawing",
+                "coloring_book": "Remove all unnatural lines, remove the abstract stlye, to coloring book, monochrome",
+            },
         }
         self.params["variations_dir"] = "reference_frame_variations"
         self.params["pad_input"] = False
@@ -205,6 +210,8 @@ class ProcessorQwenEditRefFrameVariations(ProcessorBase):
             media = media_list[0] if len(media_list) > 0 else ""
             if media == "pencil" and "loomis" in metadata.get("art_style", []):
                 media = "loomis_pencil"
+            elif "cubism" in metadata.get("art_style", []):
+                media = "cubism"
             media_prompt_dict = prompt_dict.get(media, {})
             if len(media_prompt_dict.keys()) == 0:
                 self.logger.info(
