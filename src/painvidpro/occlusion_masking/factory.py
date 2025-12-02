@@ -8,6 +8,7 @@ from painvidpro.occlusion_masking.dav2 import OcclusionMaskingDAV2
 from painvidpro.occlusion_masking.frame_diff import OcclusionMaskingFrameDiff
 from painvidpro.occlusion_masking.inspyrenet import OcclusionMaskingInSPyReNet
 from painvidpro.occlusion_masking.rmbg import OcclusionMaskingRMBG
+from painvidpro.occlusion_masking.sam3 import OcclusionMaskingSAM3
 
 
 class OcclusionMaskingFactory:
@@ -37,6 +38,8 @@ class OcclusionMaskingFactory:
             instance = OcclusionMaskingDAV2()
         elif algorithm == "OcclusionMaskingInSPyReNet":
             instance = OcclusionMaskingInSPyReNet()
+        elif algorithm == "OcclusionMaskingSAM3":
+            instance = OcclusionMaskingSAM3()
         else:
             raise ValueError(f"Unknown algorithm: {algorithm}")
 
