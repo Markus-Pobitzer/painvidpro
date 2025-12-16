@@ -1,30 +1,26 @@
 """Class for the Loomis Keyframe detection."""
-import torch
+
 import logging
 import os
-from os.path import isfile, join
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
+import torch
 from tqdm import tqdm
 from transformers import Sam3Model, Sam3Processor
 
+from painvidpro.data_storage.hdf5_video_archive import DynamicVideoArchive
 from painvidpro.logging.logging import setup_logger
-from painvidpro.logo_masking.factory import LogoMaskingFactory
-from painvidpro.object_detection.base import ObjectDetectionBase
-from painvidpro.object_detection.factory import ObjectDetectionBase, ObjectDetectionFactory
-from painvidpro.occlusion_masking.factory import OcclusionMaskingBase, OcclusionMaskingFactory
 from painvidpro.occlusion_removing.factory import OcclusionRemovingBase, OcclusionRemovingFactory
-from painvidpro.processors.keyframe import ProcessorKeyframe
-from painvidpro.utils.metadata import load_metadata, save_metadata
+from painvidpro.processors.base import ProcessorBase
+from painvidpro.utils.image_processing import process_input
 from painvidpro.video_processing.utils import video_capture_context, video_writer_context
 from painvidpro.video_processing.youtube import download_video
-from painvidpro.utils.image_processing import process_input
 
 
-class SAM3(ProcessorKeyframe):
+class SAM3(ProcessorBase):
     def __init__(self):
         """Class to process videos."""
         super().__init__()
@@ -33,10 +29,7 @@ class SAM3(ProcessorKeyframe):
         self._sam3_model: Optional[Sam3Model] = None
         self._sam3_processor: Optional[Sam3Processor] = None
         self.video_file_name = "video.mp4"
-        self.metadata_name = "metadata.json"
-        self.reference_frame_name = "reference_frame.png"
-        self.extr_folder_name = "extracted_frames"
-        self.zfill_num = 8
+        self.frame_data = "frame_data.h5"
         self._logo_removing_model: Optional[OcclusionRemovingBase] = None
 
     @property
@@ -99,79 +92,74 @@ class SAM3(ProcessorKeyframe):
         return True, ""
 
     def set_default_parameters(self):
-        super().set_default_parameters()
         self.params = {
             "yt_video_format": "bestvideo[height<=480]",
             "sam3_model": "facebook/sam3",
             "sam3_config": {},
-            "occlusion_masking_config": {
-                "prompt": ["a hand", "a paintbrush"]
-            },
+            "occlusion_masking_config": {"prompt": ["a hand", "a paintbrush", "a pencil"]},
             "disable_tqdm": True,
             "remove_videos_after_processing": False,
             "start_end_frame_detector_config": {"prompt": "a hand"},
-            "device": "cuda"
+            "device": "cuda",
+            "detect_canvas": True,
+            "canvas_detector_config": {"prompt": "a blank canvas"},
+            "num_bins": -1,
+            "num_samples_per_bin": -1,
+            "remove_logos": False,
+            "logo_masking_config": {"prompt": "a logo"},
+            "logo_removing_algorithm": "OcclusionRemovingLamaInpainting",
+            "logo_removing_config": {},
+            "detect_keyframes": False,
         }
-        self.params["detect_canvas"] = True
-        self.params["canvas_detector_config"] = {"prompt": "a blank canvas"}
-        self.params["num_bins"] = -1
-        self.params["num_samples_per_bin"] = -1
-        self.params["remove_logos"] = False
-        self.params["logo_masking_config"] = {"prompt": "a logo"}
-        self.params["logo_removing_algorithm"] = "OcclusionRemovingLamaInpainting"
-        self.params["logo_removing_config"] = {}
-        self.params["detect_keyframes"] = False
 
-    def _download_video(self, video_dir: Path, video_file_path: str, metadata: Dict[str, Any]) -> bool:
+    def _download_video(self, video_file_path: str, frame_data: DynamicVideoArchive) -> bool:
         """Downloads the video if not alredy downloaded.
 
         Args:
-            video_dir: Path to the current video dir.
             video_file_path: Path to the video file on disk.
-            metadata: Metadata as a dict.
+            frame_data: Frame data to update metadata.
 
         Returns:
             bool: True if successfull or already exists, False otherwise.
         """
         try:
             if not os.path.isfile(video_file_path):
-                # TODO: Check which site it is from needs to be done dynamically
-                if "youtube" in video_file_path:
-                    url = metadata["id"]
-                    video_format = self.params.get("yt_video_format", "bestvideo[height<=360]")
-                    try:
-                        yt_dlp_retcode = download_video(url, video_file_path, format=video_format)
-                        if yt_dlp_retcode != 0:
+                with frame_data:
+                    # TODO: Check which site it is from needs to be done dynamically
+                    if "youtube" in video_file_path:
+                        url: str = frame_data.get_global_metadata()["id"]  # type: ignore
+                        video_format = self.params.get("yt_video_format", "bestvideo[height<=480]")
+                        try:
+                            yt_dlp_retcode = download_video(url, video_file_path, format=video_format)
+                            if yt_dlp_retcode != 0:
+                                self.logger.info(
+                                    (
+                                        " While downloading the video an error occured.\n"
+                                        " The used library for downloading is https://github.com/yt-dlp/yt-dlp\n"
+                                        f" The return code of yt-dlp was {yt_dlp_retcode}."
+                                    )
+                                )
+                                return False
+                        except Exception as e:
                             self.logger.info(
                                 (
-                                    " While downloading the video an error occured.\n"
-                                    " The used library for downloading is https://github.com/yt-dlp/yt-dlp\n"
-                                    f" The return code of yt-dlp was {yt_dlp_retcode}."
+                                    f" Failed downloading YouTube video with video Id {url}"
+                                    f" and video format {video_format} to {video_file_path}:\n"
+                                    f"{e}\n"
                                 )
                             )
                             return False
-                    except Exception as e:
+                    else:
                         self.logger.info(
                             (
-                                f" Failed downloading YouTube video with video Id {url}"
-                                f" and video format {video_format} to {video_file_path}:\n"
-                                f"{e}\n"
+                                f" Was not able to determine how to download video to {video_file_path}.\n"
+                                f"The metadata: {frame_data.get_global_metadata()}."
                             )
                         )
                         return False
-                else:
-                    self.logger.info(
-                        (
-                            f" Was not able to determine how to download video to {video_file_path}.\n"
-                            f"The metadata: {metadata}."
-                        )
-                    )
-                    return False
 
-                # Reset that canvas was detected when the video gets downloaded.
-                if metadata.get("canvas_detected", False):
-                    metadata["canvas_detected"] = False
-                    save_metadata(video_dir, metadata_name=self.metadata_name, metadata=metadata)
+                    # Reset that canvas was detected when the video gets downloaded.
+                    frame_data.set_global_metadata("canvas_detected", False)
         except Exception as e:
             self.logger.info(f" Failed downloading video to {video_file_path}: {e}")
             return False
@@ -189,19 +177,17 @@ class SAM3(ProcessorKeyframe):
 
     def _detect_start_end_frame(
         self,
-        video_dir: Path,
         video_file_path: str,
-        metadata: Dict[str, Any],
+        frame_data: DynamicVideoArchive,
         batch_size: int = -1,
-        max_frames_to_consider: int = 400,
+        max_frames_to_consider: int = 300,
         frame_steps: int = 30,
     ) -> bool:
         """Detect start and end frame in the video if not already detected.
 
         Args:
-            video_dir: Path to the current video dir.
             video_file_path: Path to the video on disk.
-            metadata: Metadata as a dict.
+            frame_data: The DynamicVideoArchive.
             batch_size: If > 0, then set the batch size of sequence detector
                 for detecting start and end frame.
             max_frames_to_conside: max number of frames to consider from the first
@@ -211,10 +197,11 @@ class SAM3(ProcessorKeyframe):
         Returns:
             Boolean indicating success.
         """
+        with frame_data:
+            metadata: Dict[str, Any] = frame_data.get_global_metadata()  # type: ignore
+
         if "start_frame_idx" not in metadata or "end_frame_idx" not in metadata:
             try:
-                if batch_size > 0:
-                    self.sequence_detector.params["batch_size"] = batch_size
                 prompt = self.params["start_end_frame_detector_config"]["prompt"]
                 start_idx = -1
                 end_idx = -1
@@ -226,7 +213,6 @@ class SAM3(ProcessorKeyframe):
                     frame_idx_list = list(range(num_frames))
                     frames_to_consider = frame_idx_list[::frame_steps][:max_frames_to_consider]
                     frames_to_consider_bckwrds = frame_idx_list[::-frame_steps][:max_frames_to_consider]
-                    print(f"frames_to_consider_bckwrds: {frames_to_consider_bckwrds}")
 
                     def _first_appearance(frame_idx_list: List[int]) -> int:
                         for frame_idx in frame_idx_list:
@@ -237,15 +223,17 @@ class SAM3(ProcessorKeyframe):
                                     f"Was not able to read frame with index {frame_idx} from {video_file_path}."
                                 )
                             frame = process_input(frame, convert_bgr_to_rgb=True)
-                            inputs = self.sam3_processor(images=frame, text=prompt, return_tensors="pt").to(self.device)
+                            inputs = self.sam3_processor(images=frame, text=prompt, return_tensors="pt").to(
+                                self.device
+                            )
                             with torch.no_grad():
                                 outputs = self.sam3_model(**inputs)
                             results = self.sam3_processor.post_process_instance_segmentation(
                                 outputs,
                                 threshold=0.5,
                                 mask_threshold=0.5,
-                                target_sizes=inputs.get("original_sizes").tolist()
-                            )[0]
+                                target_sizes=inputs.get("original_sizes").tolist(),
+                            )[0]["masks"]
                             if len(results) > 0:
                                 return frame_idx
                         return -1
@@ -253,11 +241,9 @@ class SAM3(ProcessorKeyframe):
                     start_idx = _first_appearance(frame_idx_list=frames_to_consider)
                     end_idx = _first_appearance(frame_idx_list=frames_to_consider_bckwrds)
 
-                metadata["start_frame_idx"] = start_idx
-                metadata["end_frame_idx"] = end_idx
-
-                # Save metadata to disk
-                save_metadata(video_dir, metadata_name=self.metadata_name, metadata=metadata)
+                with frame_data:
+                    frame_data.set_global_metadata("start_frame_idx", start_idx)
+                    frame_data.set_global_metadata("end_frame_idx", end_idx)
             except Exception as e:
                 self.logger.info(f" Failed detecting start and end frame from {video_file_path}: {e}")
                 return False
@@ -279,7 +265,9 @@ class SAM3(ProcessorKeyframe):
             self._delete_video(video_file_path=video_file_path)
         return True
 
-    def detect_canvas(self, video_dir: Path, video_path: str, metadata: Dict[str, Any]) -> bool:
+    def detect_canvas(
+        self, video_dir: Path, video_path: str, frame_data: DynamicVideoArchive, canvas_erosion: int = 2
+    ) -> bool:
         """Detects a canvas region in the video, crops the video to this region, and updates metadata.
 
         If the metadata indicates the canvas has already been detected, the function exits early. Otherwise,
@@ -290,10 +278,11 @@ class SAM3(ProcessorKeyframe):
         Args:
             video_dir: Path to the directory containing the video.
             video_path: Path to the video file.
-            metadata: Metadata dictionary containing:
+            frame_data: DynamicVideoArchive containting the metadata dictionary:
                       - "start_frame_idx": Frame index to start canvas detection.
                       - "canvas_detected": Flag indicating if the canvas was already detected.
-                      The dictionary is modified in-place to add/update the "canvas_detected" key.
+                      The dictionary is modified add/update the "canvas_detected" key.
+            canvas_erosion: Indicates by how many pixels the canvas should be eroded.
 
         Returns:
             bool: Always returns True, indicating the process completed (successful detection or fallback to original video).
@@ -304,10 +293,12 @@ class SAM3(ProcessorKeyframe):
             - Modifies the metadata dictionary to set "canvas_detected" = True on successful detection.
             - Persists updated metadata to disk.
         """
-        # In case we already detected the canvas
-        if metadata.get("canvas_detected", False):
-            return True
-        start_frame_idx = metadata["start_frame_idx"]
+        with frame_data:
+            metadata: Dict[str, Any] = frame_data.get_global_metadata()  # type: ignore
+            # In case we already detected the canvas
+            if metadata.get("canvas_detected", False):
+                return True
+            start_frame_idx = int(metadata["start_frame_idx"])
 
         with video_capture_context(video_path=video_path) as cap:
             frame_idx_to_consider = iter([start_frame_idx])
@@ -329,31 +320,35 @@ class SAM3(ProcessorKeyframe):
             inputs = self.sam3_processor(images=frame, text=prompt, return_tensors="pt").to(self.device)
             with torch.no_grad():
                 outputs = self.sam3_model(**inputs)
-            bbox = self.sam3_processor.post_process_instance_segmentation(
-                outputs,
-                threshold=0.5,
-                mask_threshold=0.5,
-                target_sizes=inputs.get("original_sizes").tolist()
-            )[0]['boxes'].cpu().to(float).numpy()
+            bbox = (
+                self.sam3_processor.post_process_instance_segmentation(
+                    outputs, threshold=0.5, mask_threshold=0.5, target_sizes=inputs.get("original_sizes").tolist()
+                )[0]["boxes"]
+                .cpu()
+                .to(float)
+                .numpy()
+            )
 
             if len(bbox) > 0:
                 # We take the first appearance
                 x_min, y_min, x_max, y_max = bbox[0]
             else:
-                self.logger.info("Was not able to detect a canvas in the video, using the original video for processing.")
+                self.logger.info(
+                    "Was not able to detect a canvas in the video, using the original video for processing."
+                )
                 return True
 
         cavas_only_video_path = str(video_dir / "canvas_only_video.mp4")
         with video_capture_context(video_path=video_path) as cap:
             width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            fps = cap.get(cv2.CAP_PROP_FPS)
+            fps = int(cap.get(cv2.CAP_PROP_FPS))
 
             # Convert to integers (pixel indices)
-            x_min = max(0, int(round(x_min)))
-            y_min = max(0, int(round(y_min)))
-            x_max = min(width, int(round(x_max)))
-            y_max = min(height, int(round(y_max)))
+            x_min = max(0, int(round(x_min) + canvas_erosion))
+            y_min = max(0, int(round(y_min) + canvas_erosion))
+            x_max = min(width, int(round(x_max) - canvas_erosion))
+            y_max = min(height, int(round(y_max) - canvas_erosion))
             new_width = x_max - x_min
             new_height = y_max - y_min
 
@@ -369,267 +364,15 @@ class SAM3(ProcessorKeyframe):
 
         # Overwrite the original video with the cropped one
         os.replace(src=cavas_only_video_path, dst=video_path)
-        metadata["canvas_detected"] = True
-        save_metadata(video_dir=video_dir, metadata=metadata, metadata_name=self.metadata_name)
+        with frame_data:
+            frame_data.set_global_metadata("canvas_detected", True)
+            frame_data.set_global_metadata("canvas_coordinates", [x_min, y_min, x_max, y_max])
         self.logger.info(
             (
                 f"Detected Canvas with coordinates ({x_min}, {y_min}), ({x_max}, {y_max}).\n"
                 "The original video was overwritten with the cropped version."
             )
         )
-        return True
-
-    def _get_frame_indices(
-        self,
-        start_frame_idx: int,
-        end_frame_idx: int,
-        num_frames_video: int,
-        num_bins: int = 10,
-        num_samples_per_bin: int = 10,
-    ) -> List[np.ndarray]:
-        """Get the frame indices associated to the values.
-
-        Args:
-            start_frame_idx: The start frame to consider.
-            end_frame_idx: The end frame to consider.
-            num_frames_video: Total number of frames in the video.
-            num_bins: Number of bins to split the video.
-            num_samples_per_bin: The number of sampled frames per bin.
-
-        Returns:
-            Returns a List, each entry corresponding to a bin, containing
-            a numpy array with the frame indices.
-        """
-        max_num_frames = min(end_frame_idx - start_frame_idx, num_frames_video - start_frame_idx)
-        frames_per_bin = max_num_frames // num_bins
-        frame_indices = [
-            np.linspace(i * frames_per_bin, (i + 1) * frames_per_bin - 1, num=num_samples_per_bin, dtype=int)
-            for i in range(num_bins)
-        ]
-        # Shift frame indices according to start frame
-        frame_indices = [fi_array + start_frame_idx for fi_array in frame_indices]
-
-        return frame_indices
-
-    def _extract_median_frame(
-        self,
-        frame_array: np.ndarray,
-        prev_extr_frame: np.ndarray,
-        keyframes: np.ndarray,
-        rmbg_model: OcclusionMaskingBase,
-        kernel_size: int = 5,
-    ) -> np.ndarray:
-        """Extracts the median frame on the given inputs.
-
-        Applies a mask to `frame_array` to exclude foreground occlusions
-        (using `rmbg_model`), then computes the median frame across
-        `frame_array`, `prev_extr_frame`, and `keyframes`.
-        Masked regions are set to `np.nan` and ignored during median computation.
-
-        Args:
-            frame_array: Sampled frames with shape [N, H, W, 3], where N is the number of frames.
-            prev_extr_frame: The previously extracted frame with shape [H, W, 3].
-            keyframes: Keyframes with shape [M, H, W, 3], where M is the number of keyframes.
-            rmbg_model: The occlusion segmentation model.
-            kernel_size: Kernel size for occlusion mask dilation.
-
-        Returns:
-            The median frame with shape [H, W, 3], computed while ignoring masked regions.
-        """
-        kernel = np.ones((kernel_size, kernel_size), np.uint8)
-        mask_list = rmbg_model.compute_mask_list(frame_array, offload_model=False)
-
-        mask_list = [cv2.dilate(np.uint8(mask), kernel, iterations=1).astype(bool) for mask in mask_list]
-        mask_array = np.stack(mask_list)  # Convert list of masks to a single array
-
-        # Apply masks to frame_array in a vectorized way
-        frame_array[mask_array] = np.nan
-
-        # Concatenate inputs, handling empty keyframes
-        inputs = [frame_array, prev_extr_frame[np.newaxis]]
-        if keyframes.size > 0:  # Only add keyframes if they are not empty
-            inputs.append(keyframes)
-        stacked_frames = np.concatenate(inputs, axis=0)
-        median_frame = np.uint8(np.nanmedian(stacked_frames, axis=0))
-        return median_frame
-
-    def _estimate_sample_strategy(
-        self,
-        start_frame_idx: int,
-        end_frame_idx: int,
-        num_frames_video: int,
-        fps: int,
-        num_bins: int = -1,
-        num_samples_per_bin: int = -1,
-        sec_per_bin: int = 10,
-    ) -> Tuple[int, int]:
-        """Compute the number of bins and samples per bin for video sampling.
-
-        If `num_bins` or `num_samples_per_bin` is negative, they are computed based on the video's duration and FPS.
-        Otherwise, the provided values are returned as is.
-
-        Args:
-            start_frame_idx: The starting frame index to consider.
-            end_frame_idx: The ending frame index to consider.
-            num_frames_video: Total number of frames in the video.
-            fps: Frames per second of the video.
-            num_bins: Number of bins to split the video into.
-                If negative, it is computed based on `sec_per_bin`.
-            num_samples_per_bin: Number of frames to sample per bin.
-                If negative, it is computed as 3 * `sec_per_bin`.
-            sec_per_bin: Number of seconds of video each bin should
-                capture (used only when `num_bins < 0`).
-
-        Returns:
-            A tuple of (num_bins, num_samples_per_bin).
-        """
-        if num_bins < 0:
-            max_num_frames = min(end_frame_idx - start_frame_idx, num_frames_video - start_frame_idx)
-            # Each bin captures sec_per_bin seconds of content
-            frames_per_bin = fps * sec_per_bin
-            # The longer the video, the more bins
-            num_bins = int(max_num_frames // frames_per_bin)
-
-            # Ensure num_bins is at least 1 and at most 1000
-            num_bins = max(1, min(num_bins, 1000))
-
-        if num_samples_per_bin < 0:
-            # Sample 3 frames for each second of video
-            num_samples_per_bin = 3 * sec_per_bin
-
-        self.logger.info(f"Selected num_bins: {num_bins}\nSelected num_samples_per_bin: {num_samples_per_bin}")
-
-        return num_bins, num_samples_per_bin
-
-    def extract_median_frames(
-        self,
-        video_dir: Path,
-        video_path: str,
-        metadata: Dict[str, Any],
-        num_bins: int = -1,
-        num_samples_per_bin: int = -1,
-        kernel_size: int = 5,
-        disable_tqdm: bool = True,
-    ) -> bool:
-        """Extracts median frames from the video and stores them on disk.
-
-        For each bin in the video, a median frame is computed by sampling frames and applying occlusion masking.
-        The extracted frames are saved to disk.
-
-        Does nothing if metadata contains `extracted_frames` field.
-
-        Args:
-            video_dir: Path to the directory containing the video.
-            video_path: Path to the video file.
-            metadata: Metadata dict containing 'start_frame_idx' and 'end_frame_idx'.
-            num_bins: Number of bins to split the video into. If negative, it is computed automatically.
-            num_samples_per_bin: Number of frames to sample per bin. If negative, it is computed automatically.
-            kernel_size: Size of the dilation kernel applied to occlusion masks.
-            disable_tqdm: If True, disables the tqdm progress bar.
-
-        Returns:
-            A bool indicating success. If False it can be:
-            - If `end_frame_idx` is smaller than `start_frame_idx`.
-            - If reading a frame from the video fails.
-            - If no frame is read for a given frame sequence.
-        """
-        if "extracted_frames" in metadata:
-            return True
-
-        start_frame_idx = metadata["start_frame_idx"]
-        end_frame_idx = metadata["end_frame_idx"]
-        extr_frame_dir = video_dir / self.extr_folder_name
-        extr_frame_dir.mkdir(parents=True, exist_ok=True)
-        if end_frame_idx < start_frame_idx:
-            self.logger.info(
-                f"The end_frame_idx {end_frame_idx} must be bigger than start_frame_idx {start_frame_idx}."
-            )
-            return False
-        selected_keyframe_list = metadata.get("selected_keyframe_list", [])
-
-        try:
-            with video_capture_context(video_path=video_path) as cap:
-                width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                fps = cap.get(cv2.CAP_PROP_FPS)
-                num_frames_video = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
-                num_bins, num_samples_per_bin = self._estimate_sample_strategy(
-                    start_frame_idx, end_frame_idx, num_frames_video, fps, num_bins, num_samples_per_bin
-                )
-                frame_indices = self._get_frame_indices(
-                    start_frame_idx, end_frame_idx, num_frames_video, num_bins, num_samples_per_bin
-                )
-
-                median_frame_paths: List[str] = []
-                ret_frame_idx: List[int] = []
-                frame_idx = 0
-                ret, frame = cap.read()
-                if not ret:
-                    raise ValueError(f"Was not able to read first frame from {video_path}.")
-
-                # In case, first sampled frames have occluded parts add white canvas
-                prev_extr_frame = np.zeros((height, width, 3), dtype=np.float32) + 255
-
-                for f_idx_list in tqdm(frame_indices, desc="Extracting frames", disable=disable_tqdm):
-                    size_0 = len(f_idx_list)
-                    frame_array = np.zeros((size_0, height, width, 3), dtype=np.float32)
-
-                    # Keyframe list
-                    keyframe_list: List[np.ndarray] = []
-
-                    # Read the sampled frames
-                    for i, selected_f_idx in enumerate(f_idx_list):
-                        while frame_idx < selected_f_idx:
-                            ret, frame = cap.read()
-                            if not ret:
-                                # Something went wrong
-                                raise ValueError(f"Reading frame with index {frame_idx} failed.")
-                            frame_idx += 1
-
-                            if frame_idx in selected_keyframe_list:
-                                keyframe_list.append(frame)
-
-                        if frame is None:
-                            raise ValueError(f"Was not able to get frame with index {selected_f_idx}.")
-                        frame_array[i] = frame
-
-                    keyframe_array = np.stack(keyframe_list) if keyframe_list else np.array([])
-                    median_frame = self._extract_median_frame(
-                        frame_array,
-                        prev_extr_frame,
-                        keyframes=keyframe_array,
-                        rmbg_model=self.rmbg_model,
-                        kernel_size=kernel_size,
-                    )
-                    median_frame_idx = int(f_idx_list[size_0 // 2])
-                    median_fram_name = f"frame_{str(median_frame_idx).zfill(self.zfill_num)}.png"
-                    median_fram_path = str(extr_frame_dir / median_fram_name)
-                    cv2.imwrite(median_fram_path, median_frame)
-
-                    ret_frame_idx.append(median_frame_idx)
-                    median_frame_paths.append(join(self.extr_folder_name, median_fram_name))
-                    # Use the median frame in the computation of the next median frame
-                    prev_extr_frame = median_frame
-
-            # Save extracted frames to metadata
-            metadata_addition: List[Dict[str, Any]] = []
-            for median_frame_idx, median_frame_path in zip(ret_frame_idx, median_frame_paths):
-                metadata_addition.append(
-                    {
-                        "index": median_frame_idx,
-                        "path": median_frame_path,
-                        "extraction_method": "median",
-                    }
-                )
-            metadata["extracted_frames"] = metadata.get("extracted_frames", []) + metadata_addition
-            save_metadata(video_dir=video_dir, metadata=metadata, metadata_name=self.metadata_name)
-
-        except Exception as e:
-            self.logger.info(f"Was not able to extract median frames from {video_path}: {e}")
-            return False
-
-        self.logger.info(f"Successfully extracted {len(median_frame_paths)} median frames.")
         return True
 
     def _extract_frame(
@@ -653,7 +396,7 @@ class SAM3(ProcessorKeyframe):
         kernel = np.ones((kernel_size, kernel_size), np.uint8)
         # Detect the occlusions
         frame = process_input(frame, convert_bgr_to_rgb=True)
-        prompt = self.params.get("canvas_detector_config", {}).get("prompt", ["a hand", "a paintbrush"])
+        prompt = self.params.get("occlusion_masking_config", {}).get("prompt", ["a hand", "a paintbrush", "a pencil"])
         if isinstance(prompt, str):
             prompt = [prompt]
         frame_list = [frame] * len(prompt)
@@ -662,21 +405,22 @@ class SAM3(ProcessorKeyframe):
         with torch.no_grad():
             outputs = self.sam3_model(**inputs)
         results = self.sam3_processor.post_process_instance_segmentation(
-            outputs,
-            threshold=0.5,
-            mask_threshold=0.5,
-            target_sizes=inputs.get("original_sizes").tolist()
+            outputs, threshold=0.5, mask_threshold=0.5, target_sizes=inputs.get("original_sizes").tolist()
         )
 
         # Extract masks from result. Each index in the list corresponds to a prompt.
-        mask_list: List[np.ndarray] = [res['masks'].cpu().numpy().any(axis=0) for res in results]
+        empty_mask = np.zeros(frame.shape[:2], dtype=np.bool)
+        mask_list: List[np.ndarray] = [empty_mask] + [
+            res["masks"].cpu().numpy().any(axis=0) for res in results if len(res["masks"]) != 0
+        ]
         # Combine masks of all prompts
         mask = np.stack(mask_list, axis=0).any(axis=0)
         # Dilate for better coverage
         mask = cv2.dilate(np.uint8(mask), kernel, iterations=1).astype(bool)
 
         if prev_extr_frame is not None:
-            ret_frame = np.where(mask, frame, prev_extr_frame)
+            mask = mask[..., np.newaxis]
+            ret_frame = np.where(mask, prev_extr_frame, frame)
         else:
             # Notation a bit misleading but here we convert from rgb to bgr (it is just a channel switch).
             bgr_frame = process_input(frame, convert_bgr_to_rgb=True)
@@ -687,9 +431,8 @@ class SAM3(ProcessorKeyframe):
 
     def extract_n_frames(
         self,
-        video_dir: Path,
         video_path: str,
-        metadata: Dict[str, Any],
+        frame_data: DynamicVideoArchive,
         num_frames: int = 1000,
         kernel_size: int = 5,
         disable_tqdm: bool = True,
@@ -699,7 +442,6 @@ class SAM3(ProcessorKeyframe):
         Does nothing if metadata contains `extracted_frames` field.
 
         Args:
-            video_dir: Path to the directory containing the video.
             video_path: Path to the video file.
             metadata: Metadata dict containing 'start_frame_idx' and 'end_frame_idx'.
             num_frames: The number of frames to extract.
@@ -712,30 +454,28 @@ class SAM3(ProcessorKeyframe):
             - If reading a frame from the video fails.
             - If no frame is read for a given frame sequence.
         """
-        if "extracted_frames" in metadata:
-            return True
+        with frame_data:
+            if len(frame_data) > 0:
+                self.logger.info(f"Already found {len(frame_data)} frames in the dataset, skipping frame extraction.")
+                return True
 
-        start_frame_idx = metadata["start_frame_idx"]
-        end_frame_idx = metadata["end_frame_idx"]
-        extr_frame_dir = video_dir / self.extr_folder_name
-        extr_frame_dir.mkdir(parents=True, exist_ok=True)
+            metadata: Dict[str, Any] = frame_data.get_global_metadata()  # type: ignore
+            start_frame_idx = int(metadata["start_frame_idx"])
+            end_frame_idx = int(metadata["end_frame_idx"])
+
         if end_frame_idx < start_frame_idx:
             self.logger.info(
                 f"The end_frame_idx {end_frame_idx} must be bigger than start_frame_idx {start_frame_idx}."
             )
             return False
 
+        processed_frame_ids = []
         try:
             with video_capture_context(video_path=video_path) as cap:
-                width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                fps = cap.get(cv2.CAP_PROP_FPS)
                 num_frames_video = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
                 num_frames = min(num_frames, num_frames_video)
 
                 frame_indices = np.linspace(start=start_frame_idx, stop=end_frame_idx, num=num_frames).tolist()
-
-                frame_paths: List[str] = []
                 frame_idx = 0
                 ret, frame = cap.read()
                 if not ret:
@@ -750,35 +490,32 @@ class SAM3(ProcessorKeyframe):
                             raise ValueError(f"Reading frame with index {frame_idx} failed.")
                         frame_idx += 1
 
-                        if frame is None:
-                            raise ValueError(f"Was not able to get frame with index {selected_frame_idx}.")
+                    if frame is None:
+                        raise ValueError(f"Was not able to get frame with index {selected_frame_idx}.")
 
-                        cleaned_frame = self._extract_frame(frame=frame, prev_extr_frame=prev_frame, kernel_size=kernel_size)
+                    cleaned_frame = self._extract_frame(
+                        frame=frame, prev_extr_frame=prev_frame, kernel_size=kernel_size
+                    )
 
-                        fram_name = f"frame_{str(frame_idx).zfill(self.zfill_num)}.png"
-                        fram_path = str(extr_frame_dir / fram_name)
-                        cv2.imwrite(fram_path, cleaned_frame)
-                        frame_paths.append(join(self.extr_folder_name, fram_name))
-                        prev_frame = cleaned_frame
-
-            # Save extracted frames to metadata
-            metadata_addition: List[Dict[str, Any]] = []
-            for median_frame_idx, median_frame_path in zip(frame_indices, frame_paths):
-                metadata_addition.append(
-                    {
-                        "index": median_frame_idx,
-                        "path": median_frame_path,
-                        "extraction_method": "sam3",
-                    }
-                )
-            metadata["extracted_frames"] = metadata.get("extracted_frames", []) + metadata_addition
-            save_metadata(video_dir=video_dir, metadata=metadata, metadata_name=self.metadata_name)
+                    frame_progress = (frame_idx - start_frame_idx) / end_frame_idx
+                    with frame_data:
+                        frame_data.add_frame(
+                            cleaned_frame,
+                            {
+                                "processor": __name__,
+                                "frame_index": frame_idx,
+                                "frame_progress": frame_progress,
+                                "logo_removed": False,
+                            },
+                        )
+                    prev_frame = cleaned_frame
+                    processed_frame_ids.append(frame_idx)
 
         except Exception as e:
             self.logger.info(f"Was not able to extract frames from {video_path}: {e}")
             return False
 
-        self.logger.info(f"Successfully extracted {len(frame_paths)} frames.")
+        self.logger.info(f"Successfully extracted {len(processed_frame_ids)} frames.")
         return True
 
     def _create_combined_mask(self, mask_list: List[np.ndarray]) -> np.ndarray:
@@ -793,7 +530,7 @@ class SAM3(ProcessorKeyframe):
         combined_mask = sum_masks >= threshold
         return combined_mask
 
-    def _remove_logo(self, video_dir: Path, metadata: Dict[str, Any], disable_tqdm: bool = True) -> bool:
+    def _remove_logo(self, frame_data: DynamicVideoArchive, disable_tqdm: bool = True) -> bool:
         """Removes logos from extracted frames.
 
         Processes all frames listed in metadata's "extracted_frames" by first detecting logos
@@ -801,33 +538,63 @@ class SAM3(ProcessorKeyframe):
         with cleaned versions.
 
         Args:
-            video_dir: Directory containing extracted frames from video.
-            metadata: Metadata as dict.
+            frame_data: DynamicVideoArchive containing frame data.
             disable_tqdm: If True, disables progress bar visualization.
 
         Returns:
             bool: Always returns True, indicating completion of processing attempts for all frames.
                   Individual frame failures are logged but don't prevent overall completion.
         """
-        extracted_frame_list: List[str] = metadata.get("extracted_frames", [])
         succ_count = 0
-        frame_path_list: List[str] = []
         mask_list: List[np.ndarray] = []
 
+        frame_idx_list = []
+        with frame_data:
+            num_frames = len(frame_data)
+            for frame_idx in range(num_frames):
+                metadata_dict = frame_data.get_frame_metadata(frame_idx)
+                if "logo_removed" not in metadata_dict or not metadata_dict["logo_removed"]:
+                    frame_idx_list.append(frame_idx)
+
+        if len(frame_idx_list) == 0:
+            self.logger.info(
+                "No logos were removed, either no frames found or all frames had already their logo removed."
+            )
+            return True
+
         # Detection
-        for extr_frame_entry in tqdm(extracted_frame_list, disable=disable_tqdm, desc="Detecting Logos from frames"):
-            frame_path = str(video_dir / extr_frame_entry["path"])
+        for frame_idx in tqdm(frame_idx_list, disable=disable_tqdm, desc="Detecting Logos from frames"):
             try:
-                img = cv2.imread(frame_path)
-                mask = self.logo_masking_model.compute_mask_list(frame_list=[img], offload_model=False)[0]
-                # Only append when no exception occured
-                frame_path_list.append(frame_path)
-                mask_list.append(mask)
+                with frame_data:
+                    # numpy array in RGB ordering
+                    frame = np.asarray(frame_data.get_frame(frame_idx)).copy()
+
+                prompt = self.params.get("logo_masking_config", {}).get("prompt", ["a logo"])
+                if isinstance(prompt, str):
+                    prompt = [prompt]
+                frame_list = [frame] * len(prompt)
+                # Could run OOM if to many prompt items
+                inputs = self.sam3_processor(images=frame_list, text=prompt, return_tensors="pt").to(self.device)
+                with torch.no_grad():
+                    outputs = self.sam3_model(**inputs)
+                results = self.sam3_processor.post_process_instance_segmentation(
+                    outputs, threshold=0.5, mask_threshold=0.5, target_sizes=inputs.get("original_sizes").tolist()
+                )
+
+                # Extract masks from result. Each index in the list corresponds to a prompt.
+                empty_mask = np.zeros(frame.shape[:2], dtype=np.bool)
+                frame_mask_list: List[np.ndarray] = [empty_mask] + [
+                    res["masks"].cpu().numpy().any(axis=0) for res in results if len(res["masks"]) != 0
+                ]
+                # Extract a single mask for the entry
+                mask_list.append(np.stack(frame_mask_list, axis=0).any(axis=0))  # type: ignore
             except Exception as e:
                 self.logger.info(
-                    (f"Was not able to detect Logos of frame {frame_path}. " f"Following error occurred:\n{e}")
+                    (
+                        f"Was not able to detect Logos of frame with index {frame_idx}. "
+                        f"Following error occurred:\n{e}"
+                    )
                 )
-        self.logo_masking_model.offload_model()
 
         if len(mask_list) == 0:
             self.logger.info("No frames left to remove logos from.")
@@ -838,85 +605,67 @@ class SAM3(ProcessorKeyframe):
         mask_list = [np.logical_or(mask, video_mask) for mask in mask_list]
 
         # Removing
-        for frame_path, mask in tqdm(
-            zip(frame_path_list, mask_list), disable=disable_tqdm, desc="Removing Logos from frames"
+        for frame_idx, mask in tqdm(
+            zip(frame_idx_list, mask_list), disable=disable_tqdm, desc="Removing Logos from frames"
         ):
             try:
-                img = cv2.imread(frame_path)
-                cleaned_list = self.logo_removing_model.remove_occlusions(
-                    frame_list=[img], mask_list=[mask], offload_model=False
-                )
-                # Since the output is in RGB convert to BGR
-                cleaned_img = cv2.cvtColor(cleaned_list[0], cv2.COLOR_RGB2BGR)
-                # Overwriting frame with cleaned one
-                cv2.imwrite(frame_path, cleaned_img)
+                with frame_data:
+                    # PIL image in RGB ordering
+                    pil_image = frame_data.get_frame(frame_idx)
+                    # Bad notation, in this case it converts from RGB to BGR
+                    frame = process_input(np.asarray(pil_image).copy(), convert_bgr_to_rgb=True)
+
+                cleaned_frame = self.logo_removing_model.remove_occlusions(
+                    frame_list=[frame], mask_list=[mask], offload_model=False
+                )[0]
+
+                with frame_data:
+                    metadata_dict = frame_data.get_frame_metadata(frame_idx)
+                    metadata_dict["logo_removed"] = True
+                    frame_data.update_frame(index=frame_idx, image=cleaned_frame, metadata_dict=metadata_dict)
+
                 succ_count += 1
             except Exception as e:
                 self.logger.info(
-                    (f"Was not able to remove logos of frame {frame_path}. " f"Following error occurred:\n{e}")
+                    (
+                        f"Was not able to remove logos of frame with index {frame_idx}. "
+                        f"Following error occurred:\n{e}"
+                    )
                 )
         self.logo_removing_model.offload_model()
 
-        self.logger.info(
-            (
-                f"Successfully removed logos in {succ_count} frames. "
-                f"In total there are {len(extracted_frame_list)} frames."
-            )
-        )
+        self.logger.info((f"Successfully removed logos in {succ_count} frames."))
         return True
 
-    def save_reference_frame(self, video_dir: Path, metadata: Dict[str, Any], reference_frame_path: str) -> bool:
+    def save_reference_frame(self, frame_data: DynamicVideoArchive) -> bool:
         """Saves the last extracted frame as reference frame.
 
         Args:
-            video_dir: Path to the directory containing the video.
-            metadata: The metadata.
-            reference_frame_path: The path to the reference frame.
+            frame_data: The DynamicVideoArchive for the frame data.
 
         Returns:
             A bool indicating if the saving was successfull.
         """
-        if isfile(reference_frame_path):
-            return True
+        with frame_data:
+            if len(frame_data.reference_frames_dset) > 0:
+                return True
 
-        if "extracted_frames" not in metadata:
-            self.logger.info("Tried to save reference frame but no extracted_frames were found.")
-            return False
+            if len(frame_data) == 0:
+                self.logger.info("Tried to save reference frame but no extracted_frames were found.")
+                return False
 
-        max_index = -1
-        selected_frame = None
-        for extracted_frame in metadata["extracted_frames"]:
-            if extracted_frame["index"] > max_index:
-                max_index = extracted_frame["index"]
-                selected_frame = extracted_frame
+            frame = frame_data.get_frame(-1)
+            metadata = frame_data.get_frame_metadata(-1)
+            frame_data.add_reference_frame(frame, metadata)
 
-        if selected_frame is None:
-            self.logger.info("Tried to save reference frame but no extracted_frames were found.")
-            return False
-
-        try:
-            selected_frame_path = str(video_dir / selected_frame["path"])
-            cv2.imwrite(reference_frame_path, cv2.imread(selected_frame_path))
-        except Exception as e:
-            self.logger.info(
-                (
-                    f"Tried to save reference frame to {reference_frame_path}"
-                    f" but was not able to load image from video dir {video_dir}"
-                    f" with relative path {selected_frame.get('path', "no path was found")}."
-                    f"\n{e}"
-                )
-            )
-            return False
-
-        self.logger.info(f"Successfully saved reference frame to {reference_frame_path}.")
+        self.logger.info("Successfully saved reference frame.")
         return True
 
     def process(self, video_dir_list: List[str], batch_size: int = -1) -> List[bool]:
-        """Extracts the Keyframes of a Loomis Portrait video.
+        """Extracts frames of a painting tutorial video.
 
-        The processor downloads the video, splits it into two (real image and drawing),
-        detects the start/end frame in the video and extracts keyframes between
-        start/end frame.
+        The processor downloads the video, detects start and end frame as also the canvas.
+        Extracts n frames by removing occlusions such as the painters hand and logos.
 
         Args:
             video_dir_list: List of paths where the videos are stored.
@@ -930,88 +679,58 @@ class SAM3(ProcessorKeyframe):
         """
         ret = [False] * len(video_dir_list)
         disable_tqdm = self.params.get("disable_tqdm", True)
-        num_bins = self.params.get("num_bins", -1)
-        num_samples_per_bin = self.params.get("num_samples_per_bin", -1)
         detect_canvas = self.params.get("detect_canvas", True)
-        remove_logos = self.params.get("remove_logos", False)
-        detect_keyframes = self.params.get("detect_keyframes", False)
+        remove_logos = self.params.get("remove_logos", True)
+        num_frames = 1000
         for i, vd in enumerate(video_dir_list):
             video_dir = Path(vd)
-            log_file = str(video_dir / "ProcessorMatting.log")
+            log_file = str(video_dir / "SAM3_Matting.log")
             logging.basicConfig(
                 filename=log_file,
                 filemode="w",
                 force=True,
             )
             video_file_path = str(video_dir / self.video_file_name)
-            reference_frame_path = str(video_dir / self.reference_frame_name)
-
-            # Loading the metadata dict
-            succ, metadata = load_metadata(video_dir, metadata_name=self.metadata_name)
-            if not succ:
-                self.logger.info(f" Failed opening metadata {str(video_dir / self.metadata_name)}.")
-                continue
+            frame_dataset = DynamicVideoArchive(str(video_dir / self.frame_data))
 
             # Downloading the video
-            if not self._download_video(video_dir=video_dir, video_file_path=video_file_path, metadata=metadata):
+            if not self._download_video(video_file_path=video_file_path, frame_data=frame_dataset):
                 continue
 
             # Detecting start and end frame
             if not self._detect_start_end_frame(
-                video_dir=video_dir, video_file_path=video_file_path, metadata=metadata, batch_size=batch_size
+                video_file_path=video_file_path, frame_data=frame_dataset, batch_size=batch_size
             ):
                 continue
 
             # Detect the canvas if specified
             if detect_canvas and not self.detect_canvas(
-                video_dir=video_dir, video_path=video_file_path, metadata=metadata
+                video_dir=video_dir, video_path=video_file_path, frame_data=frame_dataset
             ):
                 continue
 
-            # Detecting and extracting the keyframes if specified
-            if detect_keyframes and not self._detect_keyframes(
-                video_dir=video_dir, video_file_path=video_file_path, metadata=metadata
-            ):
-                continue
-
-            # Extracting frames by computing the median of sampled frames
-            if not self.extract_median_frames(
-                video_dir=video_dir,
+            # Extracting frames
+            if not self.extract_n_frames(
                 video_path=video_file_path,
-                metadata=metadata,
-                num_bins=num_bins,
-                num_samples_per_bin=num_samples_per_bin,
+                frame_data=frame_dataset,
+                num_frames=num_frames,
                 disable_tqdm=disable_tqdm,
             ):
                 continue
 
             # Removes logo and other text from extracted frames
-            if remove_logos and not self._remove_logo(
-                video_dir=video_dir, metadata=metadata, disable_tqdm=disable_tqdm
-            ):
+            if remove_logos and not self._remove_logo(frame_data=frame_dataset, disable_tqdm=disable_tqdm):
                 continue
 
             # Save the reference frame
-            if not self.save_reference_frame(
-                video_dir=video_dir, metadata=metadata, reference_frame_path=reference_frame_path
-            ):
+            if not self.save_reference_frame(frame_data=frame_dataset):
                 continue
 
             # Post processing and cleaning up
             if not self._post_process(video_file_path=video_file_path):
                 continue
 
-            # Processing was successfull
-            metadata["processed_video_name"] = self.video_file_name
-            metadata["processed"] = True
-            save_metadata(video_dir=video_dir, metadata=metadata, metadata_name=self.metadata_name)
             ret[i] = True
-
-            # Offloading to cpu
-            try:
-                self.rmbg_model.model.to("cpu")  # type: ignore
-            except Exception as e:
-                self.logger.info(f"Was not able to offload the RMBG model: {e}")
 
         # Clear file logging
         logging.basicConfig(
