@@ -33,6 +33,7 @@ dependencies = [
     "onnxruntime>=1.22.1",
     "bitsandbytes>=0.48.1",
     "peft>=0.17.1",
+    "h5py>=3.15.1",
 ]
 
 [tool.uv.sources]
