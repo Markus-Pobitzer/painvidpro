@@ -2,6 +2,7 @@
 
 import logging
 import os
+from collections import deque
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -110,6 +111,7 @@ class SAM3(ProcessorBase):
             "logo_removing_algorithm": "OcclusionRemovingLamaInpainting",
             "logo_removing_config": {},
             "detect_keyframes": False,
+            "overwrite_with_median_frame": True,
         }
 
     def _download_video(self, video_file_path: str, frame_data: DynamicVideoArchive) -> bool:
@@ -518,6 +520,58 @@ class SAM3(ProcessorBase):
         self.logger.info(f"Successfully extracted {len(processed_frame_ids)} frames.")
         return True
 
+    def overwrite_with_median_frame(self, frame_data: DynamicVideoArchive, window_size=11) -> bool:
+        """Applies a sliding window median computation over the frames.
+
+        Args:
+            frame_data: The DynamicVideoArchive.
+            window_size: The size of the sliding window.
+
+        Returns:
+            A bool indicating success.
+        """
+        if window_size % 2 == 0:
+            raise ValueError("Window size must be odd.")
+
+        # radius = window_size // 2
+
+        with frame_data:
+            num_frames = len(frame_data)
+            if num_frames <= window_size:
+                # Edge case we do nothing
+                return True
+
+            index = 1
+            # We assume a small windowsize
+            frame_list = [np.asarray(img) for img in [frame_data[i] for i in range(window_size)]]
+            while index * 2 + 1 < window_size:
+                current_window = index * 2 + 1
+                median_array = np.median(np.stack(frame_list[:current_window], axis=0), axis=0).astype(np.uint8)
+                metadata = frame_data.get_frame_metadata(index)
+                frame_data.update_frame(index=index, image=median_array, metadata_dict=metadata)
+                index += 1
+
+            # Compute sliding window for the normal cases
+            window = deque(np.stack(frame_list, axis=0), maxlen=window_size)
+            for idx in range(window_size, num_frames):
+                median_array = np.median(np.stack(window), axis=0).astype(window[0].dtype)
+                metadata = frame_data.get_frame_metadata(index)
+                frame_data.update_frame(index=index, image=median_array, metadata_dict=metadata)
+
+                window.append(np.array(np.asarray(frame_data[idx])))
+                index += 1
+
+            while index < num_frames - 1:
+                median_array = np.median(np.stack(window), axis=0).astype(window[0].dtype)
+                metadata = frame_data.get_frame_metadata(index)
+                frame_data.update_frame(index=index, image=median_array, metadata_dict=metadata)
+
+                # Here we remove to entries on the left since no new entries can be added on the right
+                window.popleft()
+                window.popleft()
+                index += 1
+        return True
+
     def _create_combined_mask(self, mask_list: List[np.ndarray]) -> np.ndarray:
         """Extracts a mask where pixels are masked at least half the time."""
         # Convert the list of boolean masks to a 3D numpy array
@@ -681,6 +735,7 @@ class SAM3(ProcessorBase):
         disable_tqdm = self.params.get("disable_tqdm", True)
         detect_canvas = self.params.get("detect_canvas", True)
         remove_logos = self.params.get("remove_logos", True)
+        compute_median_frame = self.params.get("overwrite_with_median_frame", True)
         num_frames = 1000
         for i, vd in enumerate(video_dir_list):
             video_dir = Path(vd)
@@ -716,6 +771,9 @@ class SAM3(ProcessorBase):
                 num_frames=num_frames,
                 disable_tqdm=disable_tqdm,
             ):
+                continue
+
+            if compute_median_frame and not self.overwrite_with_median_frame(frame_data=frame_dataset):
                 continue
 
             # Removes logo and other text from extracted frames
