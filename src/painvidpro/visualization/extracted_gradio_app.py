@@ -1,6 +1,5 @@
 """Visualization extracted frames."""
 
-import os
 from pathlib import Path
 from typing import List, Optional
 
@@ -39,14 +38,11 @@ def gradio_app(root_folder: str):
     def update_display(selected_index):
         sub_subfolder, metadata = processed_metadata[selected_index]
         exclude_video = metadata.get("exclude_video", False)
-        reference_frame_name = metadata.get("reference_frame_name", "reference_frame.png")
-        reference_frame_path = os.path.join(sub_subfolder, reference_frame_name)
-        keyframes = metadata.get("selected_keyframe_list", [])
 
         # To show how well distributed the keyframes are
-        progress_bin_list = compute_progress_dist(metadata)
+        progress_bin_list = compute_progress_dist(sub_subfolder)
         prog_dist_img = vis_progress_distribution(progress_bin_list)
-        reference_frame = get_reference_frame(reference_frame_path, "", keyframes)
+        reference_frame = get_reference_frame(sub_subfolder)
 
         # return video_path, ret_keyframe
         return exclude_video, reference_frame, prog_dist_img
@@ -112,16 +108,13 @@ def gradio_app(root_folder: str):
             return video_path, channel, art_media, numb_frames, start_frame_idx, end_frame_idx
 
         def update_video(selected_index) -> Optional[str]:
-            sub_subfolder, metadata = processed_metadata[selected_index]
-            extracted_frames = metadata.get("extracted_frames", [])
-            return save_video_from_frames(
-                video_dir=sub_subfolder, frame_path_list=extracted_frames, video_output_path=tmp_video_path
-            )
+            sub_subfolder, _ = processed_metadata[selected_index]
+            return save_video_from_frames(video_dir=sub_subfolder, video_output_path=tmp_video_path)
 
         def update_ref_frame_variations(selected_index) -> List[np.ndarray]:
             """Loads the reference frame variations if there are any."""
-            sub_subfolder, metadata = processed_metadata[selected_index]
-            return get_ref_frame_variations(sub_subfolder=sub_subfolder, metadata=metadata)
+            sub_subfolder, _ = processed_metadata[selected_index]
+            return get_ref_frame_variations(sub_subfolder=sub_subfolder)
 
         def get_logs(selected_index) -> str:
             """Function to dynamically generate the tabs based on the current log_files"""
