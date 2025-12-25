@@ -21,7 +21,7 @@ from painvidpro.video_processing.utils import video_capture_context, video_write
 from painvidpro.video_processing.youtube import download_video
 
 
-class SAM3(ProcessorBase):
+class ProcessorSAM3(ProcessorBase):
     def __init__(self):
         """Class to process videos."""
         super().__init__()
@@ -104,13 +104,10 @@ class SAM3(ProcessorBase):
             "device": "cuda",
             "detect_canvas": True,
             "canvas_detector_config": {"prompt": "a blank canvas"},
-            "num_bins": -1,
-            "num_samples_per_bin": -1,
             "remove_logos": False,
             "logo_masking_config": {"prompt": "a logo"},
             "logo_removing_algorithm": "OcclusionRemovingLamaInpainting",
             "logo_removing_config": {},
-            "detect_keyframes": False,
             "overwrite_with_median_frame": True,
         }
 

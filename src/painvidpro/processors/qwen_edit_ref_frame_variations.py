@@ -127,12 +127,17 @@ class ProcessorQwenEditRefFrameVariations(ProcessorBase):
         self.params["art_media_to_var_prompt"] = {
             # Prompts refined following: https://huggingface.co/spaces/multimodalart/Qwen-Image-Edit-Fast/blob/main/app.py#L82-L135
             "pencil": {
-                "realistic": "TConvert to a realistic photo",
+                "realistic": "Convert to a realistic photo",
                 "painting": "Convert the pencil drawing into a realistic painting using natural, true-to-life colors.",
+                "monochrome": "To pencil painting, monochrome",
+                "color_pencil": "To childish pencil drawing",
+                "coloring_book": "To coloring book, monochrome",
             },
             "colored pencils": {
                 "realistic": "Convert to a realistic photo",
                 "monochrome": "To pencil painting, monochrome",
+                "color_pencil": "To childish pencil drawing",
+                "coloring_book": "To coloring book, monochrome",
             },
             "loomis_pencil": {
                 "realistic": "Render as a high-quality portrait photograph with natural lighting, sharp focus on the subject's face, soft background blur, and realistic skin tones.",
