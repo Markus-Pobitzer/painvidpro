@@ -162,6 +162,17 @@ class DynamicVideoArchive:
         """Shorthand for get_frame(index)."""
         return self.get_frame(index)
 
+    def len_reference_frames(self):
+        """
+        Returns the total number of reference frames currently stored in the archive.
+
+        Returns:
+            int: The number of referenceframes. Returns 0 if the dataset is not yet created.
+        """
+        if "reference_frames" in self.file:
+            return self.reference_frames_dset.shape[0]
+        return 0
+
     # --- 1. GLOBAL METADATA ---
     def update_global_metadata(self, metadata: Dict[str, Any]):
         """
