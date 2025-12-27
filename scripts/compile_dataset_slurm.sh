@@ -45,5 +45,6 @@ for i in "${!PIPE_PATH_LIST[@]}"; do
 
         done
     done
+done
 
 echo "All jobs submitted!"
