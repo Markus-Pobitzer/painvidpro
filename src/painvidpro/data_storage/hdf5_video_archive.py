@@ -370,6 +370,33 @@ class DynamicVideoArchive:
         self.reference_frames_dset[index] = self._prepare_image(image=image)
         self.reference_meta_dset[index] = json.dumps(metadata_dict)
 
+    def remove_reference_frame(self, index: int):
+        """
+        Removes a reference frame at the given index and shifts subsequent frames.
+
+        Args:
+            index (int): The zero-based index of the reference frame to overwrite.
+
+        Raises:
+            IndexError: If the index is out of bounds for the reference dataset.
+        """
+        self._ensure_storage()
+
+        current_shape = self.reference_frames_dset.shape[0]
+
+        if not 0 <= index < current_shape:
+            raise IndexError(f"Index {index} out of range for dataset with size {current_shape}")
+
+        # Shift data if the element is not the last one
+        if index < current_shape - 1:
+            # Move all frames after 'index' up by one position
+            self.reference_frames_dset[index:-1] = self.reference_frames_dset[index + 1 :]
+            self.reference_meta_dset[index:-1] = self.reference_meta_dset[index + 1 :]
+
+        # Shrink the dataset size by 1
+        self.reference_frames_dset.resize(current_shape - 1, axis=0)
+        self.reference_meta_dset.resize(current_shape - 1, axis=0)
+
     # --- 4. READ OPERATIONS ---
 
     def get_frame(self, index: int) -> Image.Image:
