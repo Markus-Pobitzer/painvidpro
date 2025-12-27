@@ -4,7 +4,6 @@ from typing import Any, Dict
 
 from painvidpro.processors.base import ProcessorBase
 from painvidpro.processors.keyframe import ProcessorKeyframe
-from painvidpro.processors.loomis_keyframe import ProcessorLoomisKeyframe
 from painvidpro.processors.loomis_matting import ProcessorLoomisMatting
 from painvidpro.processors.matting import ProcessorMatting
 from painvidpro.processors.qwen_edit_ref_frame_variations import ProcessorQwenEditRefFrameVariations
@@ -33,8 +32,6 @@ class ProcessorsFactory:
         instance: ProcessorBase
         if processor == "ProcessorKeyframe":
             instance = ProcessorKeyframe()
-        elif processor == "ProcessorLoomisKeyframe":
-            instance = ProcessorLoomisKeyframe()
         elif processor == "ProcessorMatting":
             instance = ProcessorMatting()
         elif processor == "ProcessorLoomisMatting":

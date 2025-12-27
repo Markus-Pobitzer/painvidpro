@@ -3,13 +3,11 @@
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from PIL import Image
-
+from painvidpro.data_storage.hdf5_video_archive import DynamicVideoArchive
 from painvidpro.image_tagger.base import ImageTaggerBase
 from painvidpro.image_tagger.llava_next import ImageTaggerLLaVANeXT
 from painvidpro.logging.logging import cleanup_logger, setup_logger
 from painvidpro.processors.base import ProcessorBase
-from painvidpro.utils.metadata import load_metadata, save_metadata
 
 
 class ProcessorRefFrameTagging(ProcessorBase):
@@ -19,7 +17,7 @@ class ProcessorRefFrameTagging(ProcessorBase):
         self.set_default_parameters()
         self._tagger: Optional[ImageTaggerBase] = None
         self.logger = setup_logger(name=__name__)
-        self.metadata_name = "metadata.json"
+        self.frame_data = "frame_data.h5"
 
     @property
     def tagger(self) -> ImageTaggerBase:
@@ -70,21 +68,23 @@ class ProcessorRefFrameTagging(ProcessorBase):
         }
         self.params["art_media_to_tag_prompt"] = prompt_dict
 
-    def _process(self, video_dir: Path, reference_frame_path: str) -> bool:
+    def _process(self, frame_data: DynamicVideoArchive) -> bool:
         """Processes a single reference frame to generate a description/tag for it.
 
         Args:
-            video_dir: Directory containing the video frames
+            frame_data: The DynamicVideoArchive.
             reference_frame_path: Path to the specific reference frame to process
 
         Returns:
             bool: True if processing was successful, False otherwise
         """
         # Loading the metadata dict
-        succ, metadata = load_metadata(video_dir, metadata_name=self.metadata_name)
-        if not succ:
-            self.logger.info(f" Failed opening metadata {str(video_dir / self.metadata_name)}.")
-            return False
+        with frame_data:
+            metadata = frame_data.get_global_metadata()
+            if frame_data.len_reference_frames() == 0:
+                self.logger.info("No reference frame found in Video Archive, skipping the tagging process.")
+                return False
+            image = frame_data.get_reference_frame(0)
 
         if "reference_frame_tags" in metadata:
             if metadata["reference_frame_tags"] is None:
@@ -99,14 +99,6 @@ class ProcessorRefFrameTagging(ProcessorBase):
                         )
                     )
                     return True
-
-        # Load reference image
-        image_path = video_dir / reference_frame_path
-        try:
-            image = Image.open(image_path)
-        except Exception as e:
-            self.logger.info(f"Failed to laod image {str(image_path)} with error: {e}")
-            return False
 
         # Get the prompt
         prompt_dict = self.params.get("art_media_to_tag_prompt", {})
@@ -129,12 +121,15 @@ class ProcessorRefFrameTagging(ProcessorBase):
             }
             self.logger.info(f"Successfully generated following tag for the reference frame:\n{tag}")
         except Exception as e:
-            self.logger.info((f"Was not able to generate ref frame tags for {str(image_path)}, error: {str(e)}"))
+            self.logger.info((f"Was not able to generate ref frame tags, error: {str(e)}"))
             return False
 
         # Save entries in metadata
-        metadata["reference_frame_tags"] = metadata.get("reference_frame_tags", []) + [tag_entry]
-        save_metadata(video_dir=video_dir, metadata=metadata, metadata_name=self.metadata_name)
+        with frame_data:
+            metadata = frame_data.get_global_metadata()
+            frame_data.set_global_metadata(
+                "reference_frame_tags", metadata.get("reference_frame_tags", []) + [tag_entry]
+            )
         return True
 
     def process(self, video_dir_list: List[str], batch_size: int = -1) -> List[bool]:
@@ -154,10 +149,9 @@ class ProcessorRefFrameTagging(ProcessorBase):
             video_dir = Path(vd)
             log_file = str(video_dir / "ProcessorRefFrameTagging.log")
             self.logger = setup_logger(name=log_file, log_file=log_file)
-            reference_frame_name = self.params.get("reference_frame_name", "reference_frame.png")
-            reference_frame_path = str(video_dir / reference_frame_name)
+            frame_dataset = DynamicVideoArchive(str(video_dir / self.frame_data))
 
-            if not self._process(video_dir=video_dir, reference_frame_path=reference_frame_path):
+            if not self._process(frame_data=frame_dataset):
                 continue
 
             ret[i] = True
