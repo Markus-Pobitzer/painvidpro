@@ -1,12 +1,10 @@
 """Visualization extracted frames."""
 
-from pathlib import Path
 from typing import List, Optional
 
 import gradio as gr
 import numpy as np
 
-from painvidpro.utils.metadata import load_metadata, save_metadata
 from painvidpro.visualization.utils import (
     cleanup,
     compute_progress_dist,
@@ -20,6 +18,7 @@ from painvidpro.visualization.utils import (
     load_pipeline,
     read_file,
     save_video_from_frames,
+    update_exclude_video_flag,
     vis_progress_distribution,
 )
 
@@ -85,16 +84,11 @@ def gradio_app(root_folder: str):
         def update_exclude_video(selected_index, checkbox_value):
             """Handles the exclude video checkobox."""
             sub_subfolder, _ = processed_metadata[selected_index]
-            # Load the metadata just in case changes happened in the meantime
-            succ, metadata = load_metadata(Path(sub_subfolder))
-            if not succ:
-                raise gr.Error(f"Was not able to load metadata from {sub_subfolder}.")
-            metadata["exclude_video"] = checkbox_value
             try:
-                save_metadata(Path(sub_subfolder), metadata=metadata)
+                metadata = update_exclude_video_flag(sub_subfolder=sub_subfolder, exclude_video=checkbox_value)
+                processed_metadata[selected_index] = (sub_subfolder, metadata)
             except Exception as e:
                 raise gr.Error(f"Was not able to save metadata in folder {sub_subfolder}: {e}")
-            processed_metadata[selected_index] = (sub_subfolder, metadata)
 
         def update_info_panel(selected_index):
             sub_subfolder, metadata = processed_metadata[selected_index]

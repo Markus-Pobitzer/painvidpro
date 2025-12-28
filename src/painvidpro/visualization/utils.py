@@ -175,6 +175,12 @@ def get_ref_frame_variations(sub_subfolder: str) -> List[np.ndarray]:
     return ret
 
 
+def update_exclude_video_flag(sub_subfolder: str, exclude_video: bool) -> Dict[str, Any]:
+    with get_h5_archive(Path(sub_subfolder)) as archive:
+        archive.set_global_metadata("exclude_video", exclude_video)
+        return archive.get_global_metadata()
+
+
 def create_temp_file(suffix: str = ".mp4") -> str:
     """Function to create a temporary file and return its path."""
     # Create a temporary file with a .mp4 extension
