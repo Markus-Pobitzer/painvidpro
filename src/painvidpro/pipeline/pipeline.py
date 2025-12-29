@@ -2,11 +2,13 @@
 
 import copy
 import dataclasses
+import gc
 import json
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+import torch
 from tqdm import tqdm
 
 from painvidpro.data_storage.hdf5_video_archive import DynamicVideoArchive
@@ -137,9 +139,14 @@ class Pipeline:
         source = video_data["source"]
         if source == "youtube":
             video_dir = self.youtube_dir / video_data["url"]
-            for processor in video_data["video_processor"]:
-                processor = ProcessorsFactory().build(processor["name"], processor["config"])
+            for video_processor in video_data["video_processor"]:
+                processor = ProcessorsFactory().build(video_processor["name"], video_processor["config"])
                 processor.process([video_dir], batch_size=batch_size)
+
+                # Explicetly free memory
+                del processor
+                gc.collect()
+                torch.cuda.empty_cache()
         else:
             self.logger.info(f"Processing for source {source} is not supported. In Video data {video_data}.")
 
