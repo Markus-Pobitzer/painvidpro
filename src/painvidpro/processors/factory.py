@@ -5,6 +5,7 @@ from typing import Any, Dict
 from painvidpro.processors.base import ProcessorBase
 from painvidpro.processors.qwen_edit_ref_frame_variations import ProcessorQwenEditRefFrameVariations
 from painvidpro.processors.ref_frame_tagging import ProcessorRefFrameTagging
+from painvidpro.processors.sam3_loomis import ProcessorSAM3Loomis
 from painvidpro.processors.sam3_matting import ProcessorSAM3
 
 
@@ -31,6 +32,8 @@ class ProcessorsFactory:
         #    instance = ProcessorRefFrameVariations()
         elif processor == "ProcessorQwenEditRefFrameVariations":
             instance = ProcessorQwenEditRefFrameVariations()
+        elif processor == "ProcessorSAM3Loomis":
+            instance = ProcessorSAM3Loomis()
         elif processor == "ProcessorSAM3":
             instance = ProcessorSAM3()
         else:
