@@ -118,7 +118,7 @@ class ProcessorQwenEditRefFrameVariations(ProcessorBase):
             "Qwen-Image-Edit-2509/Qwen-Image-Edit-2509-Lightning-8steps-V1.0-bf16.safetensors"
         )
 
-        self.params["enable_sequential_cpu_offload"] = False
+        self.params["enable_sequential_cpu_offload"] = True
         self.params["device"] = "cuda"
         self.params["seed"] = 123456
 
