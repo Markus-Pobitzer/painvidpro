@@ -12,11 +12,12 @@ PIPE_PATH_LIST=(
 
 VIDEO_SOURCE_LIST=(
     "video_sources/compiled/acrylic.jsonl"
-    "video_sources/compiled/loomis_portrai.jsonl"
+    "video_sources/compiled/loomis_portrait.jsonl"
     "video_sources/compiled/oil.jsonl"
     "video_sources/compiled/pencil.jsonl"
 )
 
+source .venv/bin/activate
 
 # Iterate over each pipeline path with index
 for i in "${!PIPE_PATH_LIST[@]}"; do
