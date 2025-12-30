@@ -196,7 +196,9 @@ def cleanup(temp_file_path: str):
         os.remove(temp_file_path)
 
 
-def save_video_from_frames(video_dir: str, video_output_path: str, fps: int = 10) -> Optional[str]:
+def save_video_from_frames(
+    video_dir: str, video_output_path: str, fps: int = 10, frame_skip_video: int = 1
+) -> Optional[str]:
     """Saves the frames from frame_path_list as a video to video_output_path"""
     with get_h5_archive(Path(video_dir)) as archive:
         if len(archive) == 0:
@@ -204,7 +206,10 @@ def save_video_from_frames(video_dir: str, video_output_path: str, fps: int = 10
 
         height, width, _channels = np.asarray(archive[0]).shape
         with video_writer_context(video_output_path, width, height, fps=fps) as vid_out:
-            for frame in archive:
+            for idx, frame in enumerate(archive):
+                if idx % frame_skip_video != 0:
+                    continue
+
                 cv_frame = cv2.cvtColor(np.asarray(frame), cv2.COLOR_BGR2RGB)
                 vid_out.write(cv_frame)
         return video_output_path
