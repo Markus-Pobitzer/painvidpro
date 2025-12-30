@@ -197,7 +197,9 @@ class ProcessorQwenEditRefFrameVariations(ProcessorBase):
             batch_size = self.params["qwen_config"].get("batch_size", 1)
 
             # Get the prompt list
-            media_list = metadata.get("art_media", [])
+            with frame_data:
+                metadata = frame_data.get_global_metadata()
+                media_list = metadata.get("art_media", [])
             media = media_list[0] if len(media_list) > 0 else ""
             if media == "pencil" and "loomis" in metadata.get("art_style", []):
                 media = "loomis_pencil"
