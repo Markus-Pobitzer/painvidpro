@@ -104,7 +104,7 @@ class ProcessorSAM3(ProcessorBase):
             "device": "cuda",
             "detect_canvas": True,
             "canvas_detector_config": {"prompt": "a blank canvas"},
-            "remove_logos": False,
+            "remove_logos": True,
             "logo_masking_config": {"prompt": "a logo"},
             "logo_removing_algorithm": "OcclusionRemovingLamaInpainting",
             "logo_removing_config": {},
@@ -496,7 +496,7 @@ class ProcessorSAM3(ProcessorBase):
                         frame=frame, prev_extr_frame=prev_frame, kernel_size=kernel_size
                     )
 
-                    frame_progress = (frame_idx - start_frame_idx) / end_frame_idx
+                    frame_progress = (frame_idx - start_frame_idx) / (end_frame_idx - start_frame_idx)
                     with frame_data:
                         frame_data.add_frame(
                             cleaned_frame,
