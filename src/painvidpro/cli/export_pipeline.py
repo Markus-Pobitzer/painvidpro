@@ -1,10 +1,10 @@
-"""Creates a hugging face dataset from a pipeline."""
+"""Creates a directory structure with test and train split."""
 
 import argparse
 import os
 import sys
 
-from painvidpro.export_dataset.export_video import export_video_to_hf_dataset
+from painvidpro.utils.export_dataset import export_pipeline
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -23,16 +23,10 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("output_dir", type=str, help="Output directory for processed Hugging Face dataset")
     parser.add_argument("--train_split_size", type=float, default=0.9, help="The training split size, between [0, 1].")
     parser.add_argument(
-        "--num_proc",
+        "--seed",
         type=int,
-        default=-1,
-        help="Number of processes to use for parallelism, default uses available resources.",
-    )
-    parser.add_argument(
-        "--max_num_frames",
-        type=int,
-        default=-1,
-        help=("If set to a vlue greater than 0, takes at most max_num_frames."),
+        default=42,
+        help=("Seed when the dataset gets split into train and test."),
     )
 
     return parser.parse_args()
@@ -59,32 +53,12 @@ def main() -> None:
         validate_arguments(args)
 
         # Step 1: Create Hugging Face DatasetDict
-        print("\n🚀 Creating Hugging Face dataset...")
-        datasetdict = export_video_to_hf_dataset(
+        print("\n🚀 Creating dataset ...")
+        export_pipeline(
             pipeline_path=args.pipeline_path,
+            output_dir=args.output_dir,
             train_split_size=args.train_split_size,
-            max_num_frames=args.max_num_frames,
-        )
-        print("✅ Dataset created successfully")
-
-        num_proc = int(args.num_proc)
-        # If negative value use 0.8 of available cpus
-        if num_proc < 1:
-            cpu_count = os.cpu_count()
-            if cpu_count is not None:
-                num_proc = int(cpu_count * 0.8)
-            else:
-                num_proc = 1
-
-        # Step 2: Save sharded dataset
-        print("\n🚀 Saving sharded dataset...")
-        datasetdict.save_to_disk(
-            dataset_dict_path=args.output_dir,
-            num_shards={
-                "train": 10,
-                "test": 2,
-            },
-            num_proc=num_proc,
+            seed=args.seed,
         )
         print(f"✅ Dataset saved to {args.output_dir}")
 

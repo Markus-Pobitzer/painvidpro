@@ -1,16 +1,12 @@
 """Visualization extracted frames."""
 
-import os
-from pathlib import Path
 from typing import List, Optional
 
 import gradio as gr
 import numpy as np
 
-from painvidpro.utils.metadata import load_metadata, save_metadata
 from painvidpro.visualization.utils import (
     cleanup,
-    compute_progress_dist,
     create_temp_file,
     filter_processed_metadata_extracted_frames,
     get_ref_frame_variations,
@@ -21,7 +17,7 @@ from painvidpro.visualization.utils import (
     load_pipeline,
     read_file,
     save_video_from_frames,
-    vis_progress_distribution,
+    update_exclude_video_flag,
 )
 
 
@@ -39,17 +35,10 @@ def gradio_app(root_folder: str):
     def update_display(selected_index):
         sub_subfolder, metadata = processed_metadata[selected_index]
         exclude_video = metadata.get("exclude_video", False)
-        reference_frame_name = metadata.get("reference_frame_name", "reference_frame.png")
-        reference_frame_path = os.path.join(sub_subfolder, reference_frame_name)
-        keyframes = metadata.get("selected_keyframe_list", [])
-
-        # To show how well distributed the keyframes are
-        progress_bin_list = compute_progress_dist(metadata)
-        prog_dist_img = vis_progress_distribution(progress_bin_list)
-        reference_frame = get_reference_frame(reference_frame_path, "", keyframes)
+        reference_frame = get_reference_frame(sub_subfolder)
 
         # return video_path, ret_keyframe
-        return exclude_video, reference_frame, prog_dist_img
+        return exclude_video, reference_frame
 
     with gr.Blocks() as demo:
         gr.Markdown("## Video and Keyframe Viewer")
@@ -58,6 +47,7 @@ def gradio_app(root_folder: str):
         with pipe_panel:
             gr.Textbox(label="Root folder", value=root_folder)  # noqa: F841
             gr.Textbox(label="Number of videos", value=numb_video)  # noqa: F841
+            frame_skip_video_input = gr.Number(label="Frame skip for `Extracted Frame Video`", value=10)
 
         selected_index = gr.Number(label="Select Index", value=0)
 
@@ -77,7 +67,6 @@ def gradio_app(root_folder: str):
         with gr.Row():
             exclude_video_checkbox = gr.Checkbox(label="Exclude Video")
 
-        image_progress = gr.Image(label="Distribution of still frames", type="numpy")
         with gr.Row():
             image_reference = gr.Image(label="Reference Frame", type="numpy", height=512)
             video_output = gr.Video(label="Extracted Frame Video", height=512)
@@ -89,16 +78,11 @@ def gradio_app(root_folder: str):
         def update_exclude_video(selected_index, checkbox_value):
             """Handles the exclude video checkobox."""
             sub_subfolder, _ = processed_metadata[selected_index]
-            # Load the metadata just in case changes happened in the meantime
-            succ, metadata = load_metadata(Path(sub_subfolder))
-            if not succ:
-                raise gr.Error(f"Was not able to load metadata from {sub_subfolder}.")
-            metadata["exclude_video"] = checkbox_value
             try:
-                save_metadata(Path(sub_subfolder), metadata=metadata)
+                metadata = update_exclude_video_flag(sub_subfolder=sub_subfolder, exclude_video=checkbox_value)
+                processed_metadata[selected_index] = (sub_subfolder, metadata)
             except Exception as e:
                 raise gr.Error(f"Was not able to save metadata in folder {sub_subfolder}: {e}")
-            processed_metadata[selected_index] = (sub_subfolder, metadata)
 
         def update_info_panel(selected_index):
             sub_subfolder, metadata = processed_metadata[selected_index]
@@ -111,17 +95,16 @@ def gradio_app(root_folder: str):
             end_frame_idx = metadata.get("end_frame_idx", -1)
             return video_path, channel, art_media, numb_frames, start_frame_idx, end_frame_idx
 
-        def update_video(selected_index) -> Optional[str]:
-            sub_subfolder, metadata = processed_metadata[selected_index]
-            extracted_frames = metadata.get("extracted_frames", [])
+        def update_video(selected_index, frame_skip_video_input) -> Optional[str]:
+            sub_subfolder, _ = processed_metadata[selected_index]
             return save_video_from_frames(
-                video_dir=sub_subfolder, frame_path_list=extracted_frames, video_output_path=tmp_video_path
+                video_dir=sub_subfolder, video_output_path=tmp_video_path, frame_skip_video=int(frame_skip_video_input)
             )
 
         def update_ref_frame_variations(selected_index) -> List[np.ndarray]:
             """Loads the reference frame variations if there are any."""
-            sub_subfolder, metadata = processed_metadata[selected_index]
-            return get_ref_frame_variations(sub_subfolder=sub_subfolder, metadata=metadata)
+            sub_subfolder, _ = processed_metadata[selected_index]
+            return get_ref_frame_variations(sub_subfolder=sub_subfolder)
 
         def get_logs(selected_index) -> str:
             """Function to dynamically generate the tabs based on the current log_files"""
@@ -147,7 +130,7 @@ def gradio_app(root_folder: str):
         selected_index.change(
             update_display,
             inputs=selected_index,
-            outputs=[exclude_video_checkbox, image_reference, image_progress],
+            outputs=[exclude_video_checkbox, image_reference],
         )
         selected_index.change(
             update_info_panel,
@@ -161,7 +144,7 @@ def gradio_app(root_folder: str):
                 end_frame_idx_text,
             ],
         )
-        selected_index.change(update_video, inputs=selected_index, outputs=[video_output])
+        selected_index.change(update_video, inputs=[selected_index, frame_skip_video_input], outputs=[video_output])
         selected_index.change(update_ref_frame_variations, inputs=selected_index, outputs=[various_ref_gallery])
         selected_index.change(get_logs, inputs=selected_index, outputs=[log_out_text])
 

@@ -2,17 +2,19 @@
 
 import copy
 import dataclasses
+import gc
 import json
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+import torch
 from tqdm import tqdm
 
+from painvidpro.data_storage.hdf5_video_archive import DynamicVideoArchive
 from painvidpro.logging.logging import setup_logger
 from painvidpro.pipeline.input_file_format import VideoItem
 from painvidpro.processors.factory import ProcessorsFactory
-from painvidpro.utils.metadata import load_metadata, save_metadata
 from painvidpro.utils.ref_frame_tags import clean_ref_frame_tags
 from painvidpro.utils.ref_frame_variations import clean_ref_frame_variations
 from painvidpro.video_processing.youtube import get_info_from_yt_url
@@ -26,6 +28,7 @@ class Pipeline:
         # Stores the video data
         self.video_item_dict: Dict[str, Dict[str, Dict[str, Any]]]
         self.save_file = "pipeline.json"
+        self.frame_data_file = "frame_data.h5"
         self._ensure_dirs()
         self.load()
 
@@ -81,11 +84,17 @@ class Pipeline:
                 video_dir.mkdir(parents=True, exist_ok=True)
                 # Metadata is jsut a dict at the moment
                 metadata = video_data
+                metadata["source"] = "youtube"
                 metadata["art_style"] = video_item.art_style
                 metadata["art_genre"] = video_item.art_genre
                 metadata["art_media"] = video_item.art_media
                 metadata["processed"] = False
-                save_metadata(video_dir=video_dir, metadata=metadata)
+                metadata["exclude_video"] = False
+
+                frame_data_path = video_dir / self.frame_data_file
+                with DynamicVideoArchive(filename=str(frame_data_path)) as archive:
+                    archive.update_global_metadata(metadata=metadata)
+
                 # Shallow copy of video_item to overwrite url
                 entry = dataclasses.replace(video_item)
                 entry.url = video_id
@@ -130,9 +139,14 @@ class Pipeline:
         source = video_data["source"]
         if source == "youtube":
             video_dir = self.youtube_dir / video_data["url"]
-            for processor in video_data["video_processor"]:
-                processor = ProcessorsFactory().build(processor["name"], processor["config"])
+            for video_processor in video_data["video_processor"]:
+                processor = ProcessorsFactory().build(video_processor["name"], video_processor["config"])
                 processor.process([video_dir], batch_size=batch_size)
+
+                # Explicetly free memory
+                del processor
+                gc.collect()
+                torch.cuda.empty_cache()
         else:
             self.logger.info(f"Processing for source {source} is not supported. In Video data {video_data}.")
 
@@ -197,8 +211,10 @@ class Pipeline:
         """Processes all video entries in the Pipeline that have not been processed yet."""
         for source in self.video_item_dict.keys():
             for video_id in tqdm(self.video_item_dict[source].keys(), desc="Processing video"):
-                video_dir = (self.base_dir / source) / video_id
-                _, video_metadata = load_metadata(video_dir=video_dir)
+                frame_data_path = self.base_dir / source / video_id / self.frame_data_file
+                with DynamicVideoArchive(filename=str(frame_data_path)) as archive:
+                    video_metadata = archive.get_global_metadata()
+
                 if not video_metadata["processed"]:
                     self.process_video(video_data=self.video_item_dict[source][video_id], batch_size=batch_size)
 
@@ -227,7 +243,11 @@ class Pipeline:
             for video_id in tqdm(self.video_item_dict[source].keys(), desc="Processing video"):
                 if source == "youtube":
                     video_dir = self.youtube_dir / self.video_item_dict[source][video_id]["url"]
-                    _, video_metadata = load_metadata(video_dir=video_dir)
+
+                    frame_data_path = video_dir / self.frame_data_file
+                    with DynamicVideoArchive(filename=str(frame_data_path)) as archive:
+                        video_metadata = archive.get_global_metadata()
+
                     if skip_excluded_videos and video_metadata.get("exclude_video", False):
                         self.logger.info(f"Skipping processing of {video_dir}, exclude_video is set in metadata.")
                         continue

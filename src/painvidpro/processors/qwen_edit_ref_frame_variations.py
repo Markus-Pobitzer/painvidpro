@@ -3,17 +3,16 @@
 import math
 import random
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import torch
 from diffusers import FlowMatchEulerDiscreteScheduler, QwenImageEditPipeline, QwenImageEditPlusPipeline
-from PIL import Image
 from tqdm import tqdm
 
+from painvidpro.data_storage.hdf5_video_archive import DynamicVideoArchive
 from painvidpro.logging.logging import cleanup_logger, setup_logger
 from painvidpro.processors.base import ProcessorBase
 from painvidpro.utils.list_processing import batch_list
-from painvidpro.utils.metadata import load_metadata, save_metadata
 
 
 class ProcessorQwenEditRefFrameVariations(ProcessorBase):
@@ -24,11 +23,11 @@ class ProcessorQwenEditRefFrameVariations(ProcessorBase):
         self.reference_frame_name = "reference_frame.png"
         self.metadata_name = "metadata.json"
         self.logger = setup_logger(name=__name__)
-        self.zfill_num = 8
         self._pipe: Optional[Union[QwenImageEditPipeline, QwenImageEditPlusPipeline]] = None
         self.torch_dtype = torch.bfloat16
         self.seed: Optional[int] = None
         self.device = "cuda"
+        self.frame_data = "frame_data.h5"
         # Set up the generator for reproducibility
         self.generator = torch.Generator(device=self.device).manual_seed(42)
         # From
@@ -119,20 +118,24 @@ class ProcessorQwenEditRefFrameVariations(ProcessorBase):
             "Qwen-Image-Edit-2509/Qwen-Image-Edit-2509-Lightning-8steps-V1.0-bf16.safetensors"
         )
 
-        self.params["enable_sequential_cpu_offload"] = False
+        self.params["enable_sequential_cpu_offload"] = True
         self.params["device"] = "cuda"
         self.params["seed"] = 123456
 
         # Define custom prompts for each art media
         self.params["art_media_to_var_prompt"] = {
-            # Prompts refined following: https://huggingface.co/spaces/multimodalart/Qwen-Image-Edit-Fast/blob/main/app.py#L82-L135
             "pencil": {
-                "realistic": "TConvert to a realistic photo",
+                "realistic": "Convert to a realistic photo",
                 "painting": "Convert the pencil drawing into a realistic painting using natural, true-to-life colors.",
+                "monochrome": "To pencil painting, monochrome",
+                "color_pencil": "To childish pencil drawing",
+                "coloring_book": "To coloring book, monochrome",
             },
             "colored pencils": {
                 "realistic": "Convert to a realistic photo",
                 "monochrome": "To pencil painting, monochrome",
+                "color_pencil": "To childish pencil drawing",
+                "coloring_book": "To coloring book, monochrome",
             },
             "loomis_pencil": {
                 "realistic": "Render as a high-quality portrait photograph with natural lighting, sharp focus on the subject's face, soft background blur, and realistic skin tones.",
@@ -160,61 +163,59 @@ class ProcessorQwenEditRefFrameVariations(ProcessorBase):
         self.params["variations_dir"] = "reference_frame_variations"
         self.params["pad_input"] = False
 
-    def _process(self, video_dir: Path, reference_frame_path: str, disable_tqdm: bool = True) -> bool:
+    def _process(self, frame_data: DynamicVideoArchive, disable_tqdm: bool = True) -> bool:
         """Processes a single reference frame to generate several version.
 
         Args:
-            video_dir: Directory containing the video frames
-            reference_frame_path: Path to the specific reference frame to process
+            frame_data: The DynamicVideoArchive.
+            reference_frame_path: Path to the specific reference frame to process.
 
         Returns:
-            bool: True if processing was successful, False otherwise
+            bool: True if processing was successful, False otherwise.
         """
         prompt_dict = self.params.get("art_media_to_var_prompt", {})
-        variations_dir = self.params.get("variations_dir", "reference_frame_variations")
 
-        # Loading the metadata dict
-        succ, metadata = load_metadata(video_dir, metadata_name=self.metadata_name)
-        if not succ:
-            self.logger.info(f" Failed opening metadata {str(video_dir / self.metadata_name)}.")
-            return False
+        # Keeps track for which prompts we already have reference frame variations
+        covered_prompts: Set = set()
 
-        if "reference_frame_variations" in metadata:
-            self.logger.info(
-                (" Metadata already contains variations of reference" " frames, no new frames will be generated.")
-            )
-            return True
-
-        # Load reference image
-        image_path = video_dir / reference_frame_path
-        try:
-            image = Image.open(image_path)
-        except Exception as e:
-            self.logger.info(f"Failed to laod image {str(image_path)} with error: {e}")
-            return False
+        with frame_data:
+            num_ref_frames = frame_data.len_reference_frames()
+            if num_ref_frames == 0:
+                self.logger.info((" No reference frame was found, therefore no variations will be generated."))
+                return False
+            elif num_ref_frames > 1:
+                # The case where variations already exist
+                for idx in range(1, num_ref_frames):
+                    metadata = frame_data.get_reference_frame_metadata(idx)
+                    if str(metadata.get("peocessor", "")) == str(__name__):
+                        covered_prompts.add(str(metadata.get("prompt", "")))
+            # Index 0 is original referene frame
+            image = frame_data.get_reference_frame(index=0)
 
         # Generate images
-        metadata_entry_list: List[Dict[str, Any]] = []
         try:
-            variations_path = video_dir / variations_dir
-            variations_path.mkdir(parents=True, exist_ok=True)
             batch_size = self.params["qwen_config"].get("batch_size", 1)
 
             # Get the prompt list
-            media_list = metadata.get("art_media", [])
+            with frame_data:
+                metadata = frame_data.get_global_metadata()
+                media_list = metadata.get("art_media", [])
             media = media_list[0] if len(media_list) > 0 else ""
             if media == "pencil" and "loomis" in metadata.get("art_style", []):
                 media = "loomis_pencil"
             media_prompt_dict = prompt_dict.get(media, {})
             if len(media_prompt_dict.keys()) == 0:
                 self.logger.info(
-                    f"No prompts specified for art media {media}, therefore no reference frame variations will be generated for {str(image_path)}"
+                    f"No prompts specified for art media {media}, therefore no reference frame variations will be generated."
                 )
                 return False
 
             prompt_keys = []
             prompt_list = []
             for key, p in media_prompt_dict.items():
+                if p in covered_prompts:
+                    self.logger.info(f"Skipping prompt {p} since it is already contained.")
+
                 prompt_keys.append(key)
                 prompt_list.append(p)
 
@@ -252,14 +253,9 @@ class ProcessorQwenEditRefFrameVariations(ProcessorBase):
                 # Resizing to original size
                 ref_image_list += [frame.resize(image.size) for frame in kontext_image_list]
 
-            for index, (key_name, prompt, img) in enumerate(zip(prompt_keys, prompt_list, ref_image_list)):
-                # Saving frame
-                img_name = f"reference_frame_variation_{key_name}_{str(index).zfill(self.zfill_num)}.png"
-                out_path = str(variations_path / img_name)
-                img.save(out_path)
-                metadata_entry_list.append(
-                    {
-                        "path": str(Path(variations_dir) / img_name),
+            with frame_data:
+                for index, (prompt, img) in enumerate(zip(prompt_list, ref_image_list)):
+                    metadata_dit = {
                         "prompt": prompt,
                         "negative_prompt": negative_prompt,
                         "seed": seed_list[index],
@@ -267,20 +263,12 @@ class ProcessorQwenEditRefFrameVariations(ProcessorBase):
                         "lora": self.params.get("qwen_lightning_lora_weight_name", ""),
                         "processor": self.__class__.__name__,
                     }
-                )
+                    frame_data.add_reference_frame(image=img, metadata_dict=metadata_dit)
             self.logger.info(f"Successfully generated {len(prompt_list)} images for specified frame.")
         except Exception as e:
-            self.logger.info((f"Was not able to generate an image for {str(image_path)}, error: {str(e)}"))
+            self.logger.info((f"Was not able to generate reference frame variations, error: {str(e)}"))
             return False
 
-        if len(metadata_entry_list) == 0:
-            # This should never happen
-            self.logger.info("Was not able to save the metadata of the generated images.")
-            return False
-
-        # Save entries in metadata
-        metadata["reference_frame_variations"] = metadata.get("reference_frame_variations", []) + metadata_entry_list
-        save_metadata(video_dir=video_dir, metadata=metadata, metadata_name=self.metadata_name)
         return True
 
     def process(self, video_dir_list: List[str], batch_size: int = -1) -> List[bool]:
@@ -304,11 +292,9 @@ class ProcessorQwenEditRefFrameVariations(ProcessorBase):
             log_file = str(video_dir / "ProcessorQwenEditRefFrameVariations.log")
             # Set log file path as name to make logger unique
             self.logger = setup_logger(name=log_file, log_file=log_file)
+            frame_dataset = DynamicVideoArchive(str(video_dir / self.frame_data))
 
-            reference_frame_name = self.params.get("reference_frame_name", "reference_frame.png")
-            reference_frame_path = str(video_dir / reference_frame_name)
-
-            if not self._process(video_dir=video_dir, reference_frame_path=reference_frame_path):
+            if not self._process(frame_data=frame_dataset):
                 continue
 
             ret[i] = True

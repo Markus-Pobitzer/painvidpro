@@ -1,1 +1,0 @@
-"""Code for aligning images."""

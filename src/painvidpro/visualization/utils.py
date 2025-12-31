@@ -11,8 +11,20 @@ from typing import Any, Dict, List, Optional, Tuple
 import cv2
 import numpy as np
 
-from painvidpro.utils.metadata import load_metadata
+from painvidpro.data_storage.hdf5_video_archive import DynamicVideoArchive
 from painvidpro.video_processing.utils import video_writer_context
+
+
+def get_h5_archive(folder: Path, h5_filename: str = "frame_data.h5") -> DynamicVideoArchive:
+    return DynamicVideoArchive(str(folder / h5_filename))
+
+
+def load_h5_metadata(folder: Path, h5_filename: str = "frame_data.h5") -> Tuple[bool, Dict[str, Any]]:
+    try:
+        with DynamicVideoArchive(str(folder / h5_filename)) as archive:
+            return True, archive.get_global_metadata()
+    except Exception:
+        return False, {}
 
 
 def get_video_folders(root_folder: str) -> List[str]:
@@ -42,21 +54,19 @@ def get_video_folders(root_folder: str) -> List[str]:
     return video_folders
 
 
-def get_keyframe_metadata(metadata: Dict[str, Any]) -> Tuple[Tuple[int, int], Optional[List[List[int]]], List[int]]:
-    """Extaracts start/end frame idx, keyframe list and selected keyframes.
+def get_start_end_frame_idx(metadata: Dict[str, Any]) -> Tuple[int, int]:
+    """Extaracts start/end frame idx.
 
     Args:
         metadata: The metadata dict.
 
     Returns:
-        Start/end frame idx, keyframe list and selected keyframes.
+        Start/end frame idx.
     """
     start_frame = metadata.get("start_frame_idx", -1)
     end_frame = metadata.get("end_frame_idx", -1)
 
-    keyframe_list = metadata.get("keyframe_list", None)
-    selected_keyframe_list = metadata.get("selected_keyframe_list", [])
-    return (start_frame, end_frame), keyframe_list, selected_keyframe_list
+    return start_frame, end_frame
 
 
 def load_pipeline(root_folder: str):
@@ -70,12 +80,12 @@ def filter_processed_metadata(sub_subfolders: List[str]) -> List[Tuple[str, Dict
     """Function to filter metadata based on entries."""
     processed_metadata = []
     for sub_subfolder in sub_subfolders:
-        succ, metadata = load_metadata(Path(sub_subfolder))
+        succ, metadata = load_h5_metadata(Path(sub_subfolder))
         if not succ:
             continue
-        (start_frame, end_frame), keyframe_list, selected_keyframe_list = get_keyframe_metadata(metadata)
-        # Only take samples that have been successfully processed with the Keyframe Processor
-        if start_frame < 0 or end_frame < 0 or keyframe_list is None or len(selected_keyframe_list) < 2:
+        start_frame, end_frame = get_start_end_frame_idx(metadata)
+        # Only take samples that have been successfully processed
+        if start_frame < 0 or end_frame < 0:
             continue
         processed_metadata.append((sub_subfolder, metadata))
     return processed_metadata
@@ -85,15 +95,16 @@ def filter_processed_metadata_extracted_frames(sub_subfolders: List[str]) -> Lis
     """Function to filter metadata based on entries."""
     processed_metadata = []
     for sub_subfolder in sub_subfolders:
-        succ, metadata = load_metadata(Path(sub_subfolder))
+        succ, metadata = load_h5_metadata(Path(sub_subfolder))
         if not succ:
             continue
 
         start_frame = metadata.get("start_frame_idx", -1)
         end_frame = metadata.get("end_frame_idx", -1)
-        extracted_frames = metadata.get("extracted_frames", [])
-        # Only take samples that have been successfully processed with the Keyframe Processor
-        if start_frame < 0 or end_frame < 0 or len(extracted_frames) == 0:
+        with get_h5_archive(Path(sub_subfolder)) as archive:
+            num_frames = len(archive)
+        # Only take samples that have been successfully processed with the Processor
+        if start_frame < 0 or end_frame < 0 or num_frames == 0:
             continue
         processed_metadata.append((sub_subfolder, metadata))
     return processed_metadata
@@ -102,51 +113,6 @@ def filter_processed_metadata_extracted_frames(sub_subfolders: List[str]) -> Lis
 def get_video_path(sub_subfolder, video_name: str = "video.mp4"):
     """Returns the video path."""
     return os.path.join(sub_subfolder, video_name)
-
-
-def load_video_and_keyframes(
-    sub_subfolder: str, metadata: Dict[str, Any], video_name: str = "video.mp4"
-) -> Tuple[str, List[int]]:
-    """Function to load video and keyframes"""
-    video_path = os.path.join(sub_subfolder, video_name)
-    keyframes = metadata.get("selected_keyframe_list", [])
-    return video_path, keyframes
-
-
-def display_keyframes_from_disk(
-    sub_subfolder: str, keyframes: List[int], keyframe_dir: str = "keyframes"
-) -> List[np.ndarray]:
-    """Function to display keyframes in RGB space."""
-    frames = []
-    keyframe_path = join(sub_subfolder, keyframe_dir)
-    keyframe_img_list = [
-        join(keyframe_path, f) for f in listdir(keyframe_path) if isfile(join(keyframe_path, f)) and f.endswith(".png")
-    ]
-    for fp in keyframe_img_list:
-        # Get the keyframe index from file path
-        ki = int(fp[-8 : -len(".png")])
-        if ki not in keyframes:
-            print(f"Keyframe {fp} with index {ki} not in selected keyfrmes: {keyframes}")
-            continue
-        keyframe_img = cv2.imread(fp)
-        frame_rgb = cv2.cvtColor(keyframe_img, cv2.COLOR_BGR2RGB)
-        frames.append(frame_rgb)
-    return frames
-
-
-def display_keyframes(video_path: str, keyframes: List[int]) -> List[np.ndarray]:
-    """Function to display keyframes in RGB space."""
-    cap = cv2.VideoCapture(video_path)
-    frames = []
-    for frame_idx in keyframes:
-        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-        ret, frame = cap.read()
-        if ret:
-            # Convert BGR to RGB
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frames.append(frame_rgb)
-    cap.release()
-    return frames
 
 
 def get_frame(video_path: str, frame_idx: int) -> np.ndarray:
@@ -161,35 +127,14 @@ def get_frame(video_path: str, frame_idx: int) -> np.ndarray:
     return cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
 
-def get_keyframe(sub_subfolder: str, keyframe_idx: int, keyframe_dir: str = "keyframes") -> np.ndarray:
-    """Function to load one keyframe in RGB space."""
-    keyframe_path = join(sub_subfolder, keyframe_dir)
-    keyframe_img_list = [
-        join(keyframe_path, f) for f in listdir(keyframe_path) if isfile(join(keyframe_path, f)) and f.endswith(".png")
-    ]
-    print(keyframe_idx)
-    for fp in keyframe_img_list:
-        # Get the keyframe index from file path
-        ki = int(fp[-8 : -len(".png")])
-        print(fp[-8 : -len(".png")], ki)
-        if ki == keyframe_idx:
-            keyframe_img = cv2.imread(fp)
-            frame_rgb = cv2.cvtColor(keyframe_img, cv2.COLOR_BGR2RGB)
-            return frame_rgb
-    raise ValueError(f"Was not able to extract Keyframe with index {keyframe_idx} from {keyframe_path}.")
-
-
-def compute_progress_dist(metadata: Dict[str, Any], number_bins: int = 100) -> List[int]:
+def compute_progress_dist(sub_subfolder: str, number_bins: int = 100) -> List[int]:
     """Each Video from start frame to last keaframe gets ordered in to bins."""
     progress_bin_list = [0] * number_bins
-    start_frame_idx = metadata["start_frame_idx"]
-    if len(metadata.get("selected_keyframe_list", [])) == 0:
-        return progress_bin_list
-    last_keyframe_idx = metadata["selected_keyframe_list"][-1] - start_frame_idx
-    for sele_keyframe in metadata["selected_keyframe_list"][:-1]:
-        progress = (sele_keyframe - start_frame_idx) / last_keyframe_idx
-        prog_bin = int(progress * number_bins)
-        progress_bin_list[prog_bin] = 1
+    with get_h5_archive(Path(sub_subfolder)) as archive:
+        for idx in range(len(archive)):
+            metadata = archive.get_frame_metadata(idx)
+            prog_bin = int(metadata["frame_progress"] * number_bins)
+            progress_bin_list[prog_bin] = 1
     return progress_bin_list
 
 
@@ -211,30 +156,29 @@ def vis_progress_distribution(progress_dist: List[int], width=1000, height=25) -
     return image
 
 
-def get_reference_frame(reference_frame_path: str, video_path: str, keyframes: List[int]) -> np.ndarray:
+def get_reference_frame(sub_subfolder: str) -> np.ndarray:
     """Loads the reference frame."""
-    img = cv2.imread(reference_frame_path)
-    if img is not None:
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        return img
     try:
-        return get_frame(video_path, keyframes[-1])
+        with get_h5_archive(Path(sub_subfolder)) as archive:
+            # First one always og reference
+            return np.asarray(archive.get_reference_frame(0))
     except Exception as _:
         return np.zeros((250, 250, 3)) + (255, 0, 0)
 
 
-def get_ref_frame_variations(sub_subfolder: str, metadata: Dict[str, Any]) -> List[np.ndarray]:
+def get_ref_frame_variations(sub_subfolder: str) -> List[np.ndarray]:
     """Loads the reference frame variations."""
     ret: List[np.ndarray] = []
-    for entry in metadata.get("reference_frame_variations", []):
-        try:
-            img_path = os.path.join(sub_subfolder, entry["path"])
-            img = cv2.imread(img_path)
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            ret.append(img)
-        except Exception:
-            pass
+    with get_h5_archive(Path(sub_subfolder)) as archive:
+        for idx in range(1, len(archive.reference_frames_dset)):
+            ret.append(np.asarray(archive.get_reference_frame(idx)))
     return ret
+
+
+def update_exclude_video_flag(sub_subfolder: str, exclude_video: bool) -> Dict[str, Any]:
+    with get_h5_archive(Path(sub_subfolder)) as archive:
+        archive.set_global_metadata("exclude_video", exclude_video)
+        return archive.get_global_metadata()
 
 
 def create_temp_file(suffix: str = ".mp4") -> str:
@@ -253,21 +197,22 @@ def cleanup(temp_file_path: str):
 
 
 def save_video_from_frames(
-    video_dir: str, frame_path_list: List[Any], video_output_path: str, fps: int = 1
+    video_dir: str, video_output_path: str, fps: int = 10, frame_skip_video: int = 1
 ) -> Optional[str]:
     """Saves the frames from frame_path_list as a video to video_output_path"""
-    frame_list = [join(video_dir, f["path"]) for f in frame_path_list if isfile(join(video_dir, f["path"]))]
+    with get_h5_archive(Path(video_dir)) as archive:
+        if len(archive) == 0:
+            return None
 
-    if len(frame_list) == 0:
-        return None
+        height, width, _channels = np.asarray(archive[0]).shape
+        with video_writer_context(video_output_path, width, height, fps=fps) as vid_out:
+            for idx, frame in enumerate(archive):
+                if idx % frame_skip_video != 0:
+                    continue
 
-    img = cv2.imread(frame_list[0])
-    height, width, _channels = img.shape
-    with video_writer_context(video_output_path, width, height, fps=fps) as vid_out:
-        for img_path in frame_list:
-            frame = cv2.imread(img_path)
-            vid_out.write(frame)
-    return video_output_path
+                cv_frame = cv2.cvtColor(np.asarray(frame), cv2.COLOR_BGR2RGB)
+                vid_out.write(cv_frame)
+        return video_output_path
 
 
 def load_log_files(folder: str, file_ending: str = ".log"):

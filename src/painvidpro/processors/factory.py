@@ -3,15 +3,10 @@
 from typing import Any, Dict
 
 from painvidpro.processors.base import ProcessorBase
-from painvidpro.processors.flux_kontext import ProcessorFluxKontext
-from painvidpro.processors.keyframe import ProcessorKeyframe
-from painvidpro.processors.loomis_keyframe import ProcessorLoomisKeyframe
-from painvidpro.processors.loomis_matting import ProcessorLoomisMatting
-from painvidpro.processors.matting import ProcessorMatting
 from painvidpro.processors.qwen_edit_ref_frame_variations import ProcessorQwenEditRefFrameVariations
-from painvidpro.processors.realistic_frame import ProcessorRealisticFrame
 from painvidpro.processors.ref_frame_tagging import ProcessorRefFrameTagging
-from painvidpro.processors.ref_frame_variations import ProcessorRefFrameVariations
+from painvidpro.processors.sam3_loomis import ProcessorSAM3Loomis
+from painvidpro.processors.sam3_matting import ProcessorSAM3
 
 
 class ProcessorsFactory:
@@ -31,24 +26,16 @@ class ProcessorsFactory:
             be build.
         """
         instance: ProcessorBase
-        if processor == "ProcessorKeyframe":
-            instance = ProcessorKeyframe()
-        elif processor == "ProcessorLoomisKeyframe":
-            instance = ProcessorLoomisKeyframe()
-        elif processor == "ProcessorMatting":
-            instance = ProcessorMatting()
-        elif processor == "ProcessorLoomisMatting":
-            instance = ProcessorLoomisMatting()
-        elif processor == "ProcessorRealisticFrame":
-            instance = ProcessorRealisticFrame()
-        elif processor == "ProcessorRefFrameTagging":
+        if processor == "ProcessorRefFrameTagging":
             instance = ProcessorRefFrameTagging()
-        elif processor == "ProcessorRefFrameVariations":
-            instance = ProcessorRefFrameVariations()
-        elif processor == "ProcessorFluxKontext":
-            instance = ProcessorFluxKontext()
+        # elif processor == "ProcessorRefFrameVariations":
+        #    instance = ProcessorRefFrameVariations()
         elif processor == "ProcessorQwenEditRefFrameVariations":
             instance = ProcessorQwenEditRefFrameVariations()
+        elif processor == "ProcessorSAM3Loomis":
+            instance = ProcessorSAM3Loomis()
+        elif processor == "ProcessorSAM3":
+            instance = ProcessorSAM3()
         else:
             raise ValueError(f"Unknown processor: {processor}")
 

@@ -12,7 +12,7 @@ PIPE_PATH_LIST=(
     "${BASE_DIR}/oil/oil"
     "${BASE_DIR}/pencil_drawing/pencil_drawing"
 )
-OUT_DIR="${BASE_DIR}/video_as_pkl_combined"
+OUT_DIR="${BASE_DIR}/combined_dataset"
 SEED=42
 
 # Make sure to remove stale dataset
@@ -22,7 +22,7 @@ rm -rf "$OUT_DIR"
 # Iterate over each pipeline path
 for PIPE_PATH in "${PIPE_PATH_LIST[@]}"; do
     echo "Exporting $PIPE_PATH"
-    python src/painvidpro/cli/export_pipeline_to_video_pkl.py \
+    python src/painvidpro/cli/export_pipeline.py \
         "$PIPE_PATH" \
         "$OUT_DIR" \
         --seed="$SEED"
