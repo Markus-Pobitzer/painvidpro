@@ -26,7 +26,6 @@ dependencies = [
     "controlnet-aux==0.0.3",
     "datasets>=3.5.0",
     "gradio>=5.15.0",
-    "lightglue",
     "protobuf>=6.31.1",
     "accelerate>=1.9.0",
     "sentencepiece>=0.2.0",
@@ -37,7 +36,6 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-lightglue = { git = "https://github.com/cvg/LightGlue.git" }
 transformers = { git = "https://github.com/huggingface/transformers.git"}
 # diffusers = { git = "https://github.com/huggingface/diffusers.git" }
 
