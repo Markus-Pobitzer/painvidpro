@@ -1,6 +1,6 @@
 [project]
 name = "painvidpro"
-version = "0.1.0"
+version = "0.2.0"
 description = "Painting Video Processing: Downloading and Processing Painting Videos"
 authors = [
     { name = "Markus Pobitzer", email = "17593719+Markus-Pobitzer@users.noreply.github.com" }
