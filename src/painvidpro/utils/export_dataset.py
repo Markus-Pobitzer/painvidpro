@@ -7,10 +7,13 @@ import shutil
 from os.path import join
 from typing import Any, Dict, List, Optional
 
+from tqdm import tqdm
+
 from painvidpro.data_storage.hdf5_video_archive import DynamicVideoArchive
 from painvidpro.pipeline.pipeline import Pipeline
 
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -22,6 +25,7 @@ def export_pipeline(
     entries_in_video_source_split: bool = False,
     seed: Optional[int] = 42,
     frame_data_file="frame_data.h5",
+    disable_tqdm: bool = False,
 ) -> None:
     """Processes video pipeline data and copies it into a split directory structure (train/test).
 
@@ -33,6 +37,7 @@ def export_pipeline(
         entries_in_video_source_split: If True, only videos found in the split file are exported.
         seed: Random seed for reproducible splitting.
         frame_data_file: The name of the HDF5 file containing frame metadata.
+        disable_tqdm: If set disables tqdm progress bar.
     """
     pipe = Pipeline(base_dir=pipeline_path)
     video_dir_list: List[str] = []
@@ -48,15 +53,17 @@ def export_pipeline(
 
     # Process videos and collect metadata
     for source in pipe.video_item_dict:
-        for video_id, _ in pipe.video_item_dict[source].items():
+        for video_id, _ in tqdm(
+            pipe.video_item_dict[source].items(), f"Exporting from {source}", disable=disable_tqdm
+        ):
             video_dir = join(pipeline_path, source, video_id)
-            with DynamicVideoArchive(join(video_dir, frame_data_file)) as frame_dataset:
+            with DynamicVideoArchive(join(video_dir, frame_data_file), mode="r") as frame_dataset:
                 metadata = frame_dataset.get_global_metadata()
                 if metadata.get("exclude_video", False):
-                    logger.info((f"Excluding {video_dir}, since the exclude_video is set in the metadata."))
+                    logger.info(f"Excluding {video_dir}, the exclude_video is set in the metadata.")
                     continue
                 if len(frame_dataset) == 0:
-                    logger.info((f"Excluding {video_dir}, since no extracted frames were found."))
+                    logger.info(f"Excluding {video_dir}, no extracted frames were found.")
                     continue
 
             if split_dict and source in split_dict and video_id in split_dict[source]:
@@ -85,3 +92,4 @@ def export_pipeline(
             video_dir_list.append(video_dir)
 
     logger.info(f"Exported {len(video_dir_list)} videos to {output_dir}.")
+    print(f"Exported {len(video_dir_list)} videos to {output_dir}.")
