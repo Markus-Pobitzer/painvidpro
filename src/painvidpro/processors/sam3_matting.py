@@ -17,6 +17,7 @@ from painvidpro.logging.logging import setup_logger
 from painvidpro.occlusion_removing.factory import OcclusionRemovingBase, OcclusionRemovingFactory
 from painvidpro.processors.base import ProcessorBase
 from painvidpro.utils.image_processing import process_input
+from painvidpro.video_processing.converting import convert_video_with_ffmpeg
 from painvidpro.video_processing.utils import video_capture_context, video_writer_context
 from painvidpro.video_processing.youtube import download_video
 
@@ -162,6 +163,34 @@ class ProcessorSAM3(ProcessorBase):
         except Exception as e:
             self.logger.info(f" Failed downloading video to {video_file_path}: {e}")
             return False
+        return True
+
+    def _check_video_and_convert(self, video_file_path: str) -> bool:
+        """Checks if the video can be opened and if not tries to convert it.
+
+        Args:
+            video_file_path: The path to the video.
+
+        Returns:
+            Bool indicating success.
+        """
+        convert = True
+        try:
+            with video_capture_context(video_path=video_file_path) as cap:
+                if cap.isOpened():
+                    # Read frame to check
+                    res, frame = cap.read()
+                    if res and frame is not None:
+                        convert = False
+        except Exception:
+            pass
+
+        if convert:
+            self.logger.info("Converting video to a supported encoding.")
+            succ, msg = convert_video_with_ffmpeg(video_path=video_file_path)
+            if not succ:
+                self.logger.info(f"Failed to convert the video, following error: {msg}")
+                return False
         return True
 
     def _delete_video(self, video_file_path: str):
@@ -749,6 +778,10 @@ class ProcessorSAM3(ProcessorBase):
             if not self._download_video(video_file_path=video_file_path, frame_data=frame_dataset):
                 continue
 
+            # Check the downloaded video and convert it if neccessary
+            if not self._check_video_and_convert(video_file_path=video_file_path):
+                continue
+
             # Detecting start and end frame
             if not self._detect_start_end_frame(
                 video_file_path=video_file_path, frame_data=frame_dataset, batch_size=batch_size
@@ -759,6 +792,10 @@ class ProcessorSAM3(ProcessorBase):
             if detect_canvas and not self.detect_canvas(
                 video_dir=video_dir, video_path=video_file_path, frame_data=frame_dataset
             ):
+                continue
+
+            # We overwrote the video, better double check
+            if not self._check_video_and_convert(video_file_path=video_file_path):
                 continue
 
             # Extracting frames
