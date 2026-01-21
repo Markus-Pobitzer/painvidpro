@@ -174,6 +174,24 @@ class DynamicVideoArchive:
         return 0
 
     # --- 1. GLOBAL METADATA ---
+    def _serialize_value(self, value: Any) -> Any:
+        """Helper to serialize complex types to JSON strings."""
+        if isinstance(value, (dict, list)):
+            return json.dumps(value)
+        return value
+
+    def _deserialize_value(self, value: Any) -> Any:
+        """Helper to try and deserialize JSON strings back to objects."""
+        if isinstance(value, str):
+            try:
+                # Check if it looks like a JSON structure (starts with { or [)
+                # to avoid trying to parse simple strings like "Validation"
+                if value.strip().startswith(("{", "[")):
+                    return json.loads(value)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return value
+
     def update_global_metadata(self, metadata: Dict[str, Any]):
         """
         Updates the HDF5 file root attributes with multiple key-value pairs.
@@ -182,7 +200,9 @@ class DynamicVideoArchive:
             metadata (Dict[str, Any]): A dictionary of metadata to store
                 at the file level.
         """
-        self.file.attrs.update(metadata)
+        # Create a sanitized dictionary where complex objects are JSON strings
+        sanitized_metadata = {k: self._serialize_value(v) for k, v in metadata.items()}
+        self.file.attrs.update(sanitized_metadata)
 
     def set_global_metadata(self, key: str, value: Any):
         """
@@ -192,16 +212,22 @@ class DynamicVideoArchive:
             key (str): The name of the metadata field.
             value (Any): The value to store (must be HDF5-compatible).
         """
-        self.file.attrs[key] = value
+        self.file.attrs[key] = self._serialize_value(value)
 
-    def get_global_metadata(self):
+    def get_global_metadata(self) -> Dict[str, Any]:
         """
         Retrieves all global metadata stored at the file root.
 
         Returns:
             Dict[str, Any]: A dictionary of all file attributes.
         """
-        return dict(self.file.attrs)
+        # Get raw attributes
+        raw_attrs = dict(self.file.attrs)
+
+        # Deserialize any JSON strings back to Python objects
+        clean_attrs = {k: self._deserialize_value(v) for k, v in raw_attrs.items()}
+
+        return clean_attrs
 
     def _prepare_image(self, image: Union[Image.Image, np.ndarray]) -> np.ndarray:
         """

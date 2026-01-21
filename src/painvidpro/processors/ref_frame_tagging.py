@@ -109,15 +109,15 @@ class ProcessorRefFrameTagging(ProcessorBase):
         prompt = prompt_dict.get(media)
 
         # Generate tags for images
-        tag_entry: Dict[str, Any] = {}
+        tag_entry: Dict[str, str] = {}
         try:
             tag_dict = self.tagger.predict(image=image, prompt=prompt)
             tag = tag_dict["image_description"]
             tag_entry = {
-                "prompt": prompt,
-                "image_tagger": self.params.get("image_tagger", ""),
-                "processor": self.__class__.__name__,
-                "tag": tag,
+                "prompt": str(prompt),
+                "image_tagger": str(self.params.get("image_tagger", "")),
+                "processor": str(self.__class__.__name__),
+                "tag": str(tag),
             }
             self.logger.info(f"Successfully generated following tag for the reference frame:\n{tag}")
         except Exception as e:
@@ -127,9 +127,9 @@ class ProcessorRefFrameTagging(ProcessorBase):
         # Save entries in metadata
         with frame_data:
             metadata = frame_data.get_global_metadata()
-            frame_data.set_global_metadata(
-                "reference_frame_tags", metadata.get("reference_frame_tags", []) + [tag_entry]
-            )
+            current_tags = metadata.get("reference_frame_tags", [])
+            current_tags.append(tag_entry)
+            frame_data.set_global_metadata("reference_frame_tags", current_tags)
         return True
 
     def process(self, video_dir_list: List[str], batch_size: int = -1) -> List[bool]:
