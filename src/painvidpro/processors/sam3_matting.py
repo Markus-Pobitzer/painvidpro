@@ -165,10 +165,11 @@ class ProcessorSAM3(ProcessorBase):
             return False
         return True
 
-    def _check_video_and_convert(self, video_file_path: str) -> bool:
+    def _check_video_and_convert(self, video_dir: Path, video_file_path: str) -> bool:
         """Checks if the video can be opened and if not tries to convert it.
 
         Args:
+            video_dir: The video_dir.
             video_file_path: The path to the video.
 
         Returns:
@@ -187,7 +188,9 @@ class ProcessorSAM3(ProcessorBase):
 
         if convert:
             self.logger.info("Converting video to a supported encoding.")
-            succ, msg = convert_video_with_ffmpeg(video_path=video_file_path)
+            succ, msg = convert_video_with_ffmpeg(
+                video_path=video_file_path, temp_path=str(video_dir / "temp_fixed_video.mp4")
+            )
             if not succ:
                 self.logger.info(f"Failed to convert the video, following error: {msg}")
                 return False
@@ -779,7 +782,7 @@ class ProcessorSAM3(ProcessorBase):
                 continue
 
             # Check the downloaded video and convert it if neccessary
-            if not self._check_video_and_convert(video_file_path=video_file_path):
+            if not self._check_video_and_convert(video_dir=video_dir, video_file_path=video_file_path):
                 continue
 
             # Detecting start and end frame
@@ -795,7 +798,7 @@ class ProcessorSAM3(ProcessorBase):
                 continue
 
             # We overwrote the video, better double check
-            if not self._check_video_and_convert(video_file_path=video_file_path):
+            if not self._check_video_and_convert(video_dir=video_dir, video_file_path=video_file_path):
                 continue
 
             # Extracting frames
