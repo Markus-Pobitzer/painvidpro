@@ -13,18 +13,22 @@ def _extract_meta(result: Dict[str, Any], key_list: List[str], default: Any = ""
     return ret
 
 
-def download_video(url: str, output_path: str, format: str = "bestvideo[height<=360]") -> int:
+def download_video(url: str, output_path: str, format: str = "bestvideo[height<=360]", cookies_path: str = "") -> int:
     """Downloads a YouTube video.
 
     Args:
         url: The YouTube URL.
         output_path: The output path on disk.
         format: The ydl video format.
+        cookies_path: Path to the Netscape-formatted cookies.txt file.
 
     Returns:
         yt-dlp retcode, 0 for success.
     """
-    ydl_opts = {"format": format, "outtmpl": output_path}
+    ydl_opts = {"format": format, "outtmpl": output_path, "verbose": True}
+    if cookies_path != "":
+        ydl_opts["cookiefile"] = cookies_path
+
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         return ydl.download([url])
 

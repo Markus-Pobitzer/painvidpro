@@ -110,6 +110,7 @@ class ProcessorSAM3(ProcessorBase):
             "logo_removing_algorithm": "OcclusionRemovingLamaInpainting",
             "logo_removing_config": {},
             "overwrite_with_median_frame": True,
+            "cookies_path": "cookies.txt",
         }
 
     def _download_video(self, video_file_path: str, frame_data: DynamicVideoArchive) -> bool:
@@ -129,8 +130,11 @@ class ProcessorSAM3(ProcessorBase):
                     if "youtube" in video_file_path:
                         url: str = frame_data.get_global_metadata()["id"]  # type: ignore
                         video_format = self.params.get("yt_video_format", "bestvideo[height<=480]")
+                        cookies_path = self.params.get("cookies_path", "")
                         try:
-                            yt_dlp_retcode = download_video(url, video_file_path, format=video_format)
+                            yt_dlp_retcode = download_video(
+                                url, video_file_path, format=video_format, cookies_path=cookies_path
+                            )
                             if yt_dlp_retcode != 0:
                                 self.logger.info(
                                     (

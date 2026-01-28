@@ -402,3 +402,4 @@ FodyWeavers.xsd
 # Env variables
 .env
 dev_notebooks/
+cookies.txt
