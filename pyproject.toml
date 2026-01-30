@@ -11,7 +11,7 @@ requires-python = ">=3.12"
 dependencies = [
     "python-dotenv>=1.0.1",
     "deno",
-    "yt-dlp[default]",
+    "yt-dlp[default]>=2026.01.29",
     "scipy>=1.15.1",
     "opencv-python>=4.10.0.84",
     "tqdm>=4.67.1",
@@ -38,7 +38,7 @@ dependencies = [
 
 [tool.uv.sources]
 transformers = { git = "https://github.com/huggingface/transformers.git"}
-yt-dlp = { git = "https://github.com/yt-dlp/yt-dlp.git" }
+# yt-dlp = { git = "https://github.com/yt-dlp/yt-dlp.git" }
 # diffusers = { git = "https://github.com/huggingface/diffusers.git" }
 
 
