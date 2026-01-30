@@ -780,42 +780,51 @@ class ProcessorSAM3(ProcessorBase):
             )
             video_file_path = str(video_dir / self.video_file_name)
             frame_dataset = DynamicVideoArchive(str(video_dir / self.frame_data))
+            extract = True
 
-            # Downloading the video
-            if not self._download_video(video_file_path=video_file_path, frame_data=frame_dataset):
-                continue
+            with frame_dataset:
+                if len(frame_dataset) > 0:
+                    self.logger.info(
+                        f"Already found {len(frame_dataset)} frames in the dataset, skipping frame extraction."
+                    )
+                    extract = False
 
-            # Check the downloaded video and convert it if neccessary
-            if not self._check_video_and_convert(video_dir=video_dir, video_file_path=video_file_path):
-                continue
+            if extract:
+                # Downloading the video
+                if not self._download_video(video_file_path=video_file_path, frame_data=frame_dataset):
+                    continue
 
-            # Detecting start and end frame
-            if not self._detect_start_end_frame(
-                video_file_path=video_file_path, frame_data=frame_dataset, batch_size=batch_size
-            ):
-                continue
+                # Check the downloaded video and convert it if neccessary
+                if not self._check_video_and_convert(video_dir=video_dir, video_file_path=video_file_path):
+                    continue
 
-            # Detect the canvas if specified
-            if detect_canvas and not self.detect_canvas(
-                video_dir=video_dir, video_path=video_file_path, frame_data=frame_dataset
-            ):
-                continue
+                # Detecting start and end frame
+                if not self._detect_start_end_frame(
+                    video_file_path=video_file_path, frame_data=frame_dataset, batch_size=batch_size
+                ):
+                    continue
 
-            # We overwrote the video, better double check
-            if not self._check_video_and_convert(video_dir=video_dir, video_file_path=video_file_path):
-                continue
+                # Detect the canvas if specified
+                if detect_canvas and not self.detect_canvas(
+                    video_dir=video_dir, video_path=video_file_path, frame_data=frame_dataset
+                ):
+                    continue
 
-            # Extracting frames
-            if not self.extract_n_frames(
-                video_path=video_file_path,
-                frame_data=frame_dataset,
-                num_frames=num_frames,
-                disable_tqdm=disable_tqdm,
-            ):
-                continue
+                # We overwrote the video, better double check
+                if not self._check_video_and_convert(video_dir=video_dir, video_file_path=video_file_path):
+                    continue
 
-            if compute_median_frame and not self.overwrite_with_median_frame(frame_data=frame_dataset):
-                continue
+                # Extracting frames
+                if not self.extract_n_frames(
+                    video_path=video_file_path,
+                    frame_data=frame_dataset,
+                    num_frames=num_frames,
+                    disable_tqdm=disable_tqdm,
+                ):
+                    continue
+
+                if compute_median_frame and not self.overwrite_with_median_frame(frame_data=frame_dataset):
+                    continue
 
             # Removes logo and other text from extracted frames
             if remove_logos and not self._remove_logo(frame_data=frame_dataset, disable_tqdm=disable_tqdm):
