@@ -187,7 +187,7 @@ class ProcessorQwenEditRefFrameVariations(ProcessorBase):
                 # The case where variations already exist
                 for idx in range(1, num_ref_frames):
                     metadata = frame_data.get_reference_frame_metadata(idx)
-                    if str(metadata.get("peocessor", "")) == str(__name__):
+                    if str(metadata.get("peocessor", "")) == str(self.__class__.__name__):
                         covered_prompts.add(str(metadata.get("prompt", "")))
             # Index 0 is original referene frame
             image = frame_data.get_reference_frame(index=0)
@@ -261,7 +261,7 @@ class ProcessorQwenEditRefFrameVariations(ProcessorBase):
                         "seed": seed_list[index],
                         "model": self.params.get("qwen_algorithm", ""),
                         "lora": self.params.get("qwen_lightning_lora_weight_name", ""),
-                        "processor": self.__class__.__name__,
+                        "processor": str(self.__class__.__name__),
                     }
                     frame_data.add_reference_frame(image=img, metadata_dict=metadata_dit)
             self.logger.info(f"Successfully generated {len(prompt_list)} images for specified frame.")

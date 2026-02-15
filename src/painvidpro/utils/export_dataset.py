@@ -20,7 +20,8 @@ logger = logging.getLogger(__name__)
 def export_pipeline(
     pipeline_path: str,
     output_dir: str,
-    train_split_size: float = 0.9,
+    train_split_size: float = 0.8,
+    eval_split_size: float = 0.1,
     video_source_split: Optional[str] = "video_sources/video_sources_split.json",
     entries_in_video_source_split: bool = False,
     seed: Optional[int] = 42,
@@ -39,6 +40,9 @@ def export_pipeline(
         frame_data_file: The name of the HDF5 file containing frame metadata.
         disable_tqdm: If set disables tqdm progress bar.
     """
+    if train_split_size + eval_split_size > 1.0:
+        raise ValueError("Train and Eval splits cannot sum to more than 1.0")
+
     pipe = Pipeline(base_dir=pipeline_path)
     video_dir_list: List[str] = []
 
@@ -79,8 +83,11 @@ def export_pipeline(
                     continue
 
                 split = "test"
-                if random.random() <= train_split_size:
+                r = random.random()
+                if r <= train_split_size:
                     split = "train"
+                elif r <= (train_split_size + eval_split_size):
+                    split = "eval"
 
             out_dir = join(output_dir, split, source, video_id)
             try:

@@ -21,7 +21,18 @@ def parse_arguments() -> argparse.Namespace:
     # Required arguments
     parser.add_argument("pipeline_path", type=str, help="Directory containing the pipeline.")
     parser.add_argument("output_dir", type=str, help="Output directory for processed Hugging Face dataset")
-    parser.add_argument("--train_split_size", type=float, default=0.9, help="The training split size, between [0, 1].")
+    parser.add_argument(
+        "--train_split_size",
+        type=float,
+        default=0.8,
+        help="The training split size, between [0, 1]. train_split_size + eval_split_size <= 1.",
+    )
+    parser.add_argument(
+        "--eval_split_size",
+        type=float,
+        default=0.1,
+        help="The eval split size, between [0, 1]. train_split_size + eval_split_size <= 1.",
+    )
     parser.add_argument(
         "--seed",
         type=int,
@@ -58,6 +69,7 @@ def main() -> None:
             pipeline_path=args.pipeline_path,
             output_dir=args.output_dir,
             train_split_size=args.train_split_size,
+            eval_split_size=args.eval_split_size,
             seed=args.seed,
         )
         print(f"✅ Dataset saved to {args.output_dir}")

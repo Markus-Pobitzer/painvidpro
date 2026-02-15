@@ -17,6 +17,7 @@ from painvidpro.logging.logging import setup_logger
 from painvidpro.occlusion_removing.factory import OcclusionRemovingBase, OcclusionRemovingFactory
 from painvidpro.processors.base import ProcessorBase
 from painvidpro.utils.image_processing import process_input
+from painvidpro.video_processing.converting import convert_video_with_ffmpeg
 from painvidpro.video_processing.utils import video_capture_context, video_writer_context
 from painvidpro.video_processing.youtube import download_video
 
@@ -109,6 +110,7 @@ class ProcessorSAM3(ProcessorBase):
             "logo_removing_algorithm": "OcclusionRemovingLamaInpainting",
             "logo_removing_config": {},
             "overwrite_with_median_frame": True,
+            "cookies_path": "cookies.txt",
         }
 
     def _download_video(self, video_file_path: str, frame_data: DynamicVideoArchive) -> bool:
@@ -128,8 +130,11 @@ class ProcessorSAM3(ProcessorBase):
                     if "youtube" in video_file_path:
                         url: str = frame_data.get_global_metadata()["id"]  # type: ignore
                         video_format = self.params.get("yt_video_format", "bestvideo[height<=480]")
+                        cookies_path = self.params.get("cookies_path", "")
                         try:
-                            yt_dlp_retcode = download_video(url, video_file_path, format=video_format)
+                            yt_dlp_retcode = download_video(
+                                url, video_file_path, format=video_format, cookies_path=cookies_path
+                            )
                             if yt_dlp_retcode != 0:
                                 self.logger.info(
                                     (
@@ -162,6 +167,37 @@ class ProcessorSAM3(ProcessorBase):
         except Exception as e:
             self.logger.info(f" Failed downloading video to {video_file_path}: {e}")
             return False
+        return True
+
+    def _check_video_and_convert(self, video_dir: Path, video_file_path: str) -> bool:
+        """Checks if the video can be opened and if not tries to convert it.
+
+        Args:
+            video_dir: The video_dir.
+            video_file_path: The path to the video.
+
+        Returns:
+            Bool indicating success.
+        """
+        convert = True
+        try:
+            with video_capture_context(video_path=video_file_path) as cap:
+                if cap.isOpened():
+                    # Read frame to check
+                    res, frame = cap.read()
+                    if res and frame is not None:
+                        convert = False
+        except Exception:
+            pass
+
+        if convert:
+            self.logger.info("Converting video to a supported encoding.")
+            succ, msg = convert_video_with_ffmpeg(
+                video_path=video_file_path, temp_path=str(video_dir / "temp_fixed_video.mp4")
+            )
+            if not succ:
+                self.logger.info(f"Failed to convert the video, following error: {msg}")
+                return False
         return True
 
     def _delete_video(self, video_file_path: str):
@@ -744,34 +780,51 @@ class ProcessorSAM3(ProcessorBase):
             )
             video_file_path = str(video_dir / self.video_file_name)
             frame_dataset = DynamicVideoArchive(str(video_dir / self.frame_data))
+            extract = True
 
-            # Downloading the video
-            if not self._download_video(video_file_path=video_file_path, frame_data=frame_dataset):
-                continue
+            with frame_dataset:
+                if len(frame_dataset) > 0:
+                    self.logger.info(
+                        f"Already found {len(frame_dataset)} frames in the dataset, skipping frame extraction."
+                    )
+                    extract = False
 
-            # Detecting start and end frame
-            if not self._detect_start_end_frame(
-                video_file_path=video_file_path, frame_data=frame_dataset, batch_size=batch_size
-            ):
-                continue
+            if extract:
+                # Downloading the video
+                if not self._download_video(video_file_path=video_file_path, frame_data=frame_dataset):
+                    continue
 
-            # Detect the canvas if specified
-            if detect_canvas and not self.detect_canvas(
-                video_dir=video_dir, video_path=video_file_path, frame_data=frame_dataset
-            ):
-                continue
+                # Check the downloaded video and convert it if neccessary
+                if not self._check_video_and_convert(video_dir=video_dir, video_file_path=video_file_path):
+                    continue
 
-            # Extracting frames
-            if not self.extract_n_frames(
-                video_path=video_file_path,
-                frame_data=frame_dataset,
-                num_frames=num_frames,
-                disable_tqdm=disable_tqdm,
-            ):
-                continue
+                # Detecting start and end frame
+                if not self._detect_start_end_frame(
+                    video_file_path=video_file_path, frame_data=frame_dataset, batch_size=batch_size
+                ):
+                    continue
 
-            if compute_median_frame and not self.overwrite_with_median_frame(frame_data=frame_dataset):
-                continue
+                # Detect the canvas if specified
+                if detect_canvas and not self.detect_canvas(
+                    video_dir=video_dir, video_path=video_file_path, frame_data=frame_dataset
+                ):
+                    continue
+
+                # We overwrote the video, better double check
+                if not self._check_video_and_convert(video_dir=video_dir, video_file_path=video_file_path):
+                    continue
+
+                # Extracting frames
+                if not self.extract_n_frames(
+                    video_path=video_file_path,
+                    frame_data=frame_dataset,
+                    num_frames=num_frames,
+                    disable_tqdm=disable_tqdm,
+                ):
+                    continue
+
+                if compute_median_frame and not self.overwrite_with_median_frame(frame_data=frame_dataset):
+                    continue
 
             # Removes logo and other text from extracted frames
             if remove_logos and not self._remove_logo(frame_data=frame_dataset, disable_tqdm=disable_tqdm):
