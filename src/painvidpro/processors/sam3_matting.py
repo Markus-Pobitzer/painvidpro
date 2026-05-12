@@ -105,7 +105,7 @@ class ProcessorSAM3(ProcessorBase):
             "device": "cuda",
             "detect_canvas": True,
             "canvas_detector_config": {"prompt": "a blank canvas"},
-            "remove_logos": True,
+            "remove_logos": False,
             "logo_masking_config": {"prompt": "a logo"},
             "logo_removing_algorithm": "OcclusionRemovingLamaInpainting",
             "logo_removing_config": {},
