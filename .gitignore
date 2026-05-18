@@ -403,3 +403,4 @@ FodyWeavers.xsd
 .env
 dev_notebooks/
 cookies.txt
+slurm_log/

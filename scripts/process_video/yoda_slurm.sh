@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -x
 #SBATCH -A staff
 #SBATCH -J process_video
 #SBATCH -t 24:00:00              # Max runtime 24 hours
@@ -24,11 +24,21 @@ source .venv/bin/activate
 
 echo "Processing video with args:" "$BASE_DIR" "$SOURCE" "$VIDEO_ID"
 
+ART_MEDIA=$(basename "$BASE_DIR")
+# Load pre-downloaded videos
+rsync -avPh "mpobitzer@sinaia.disi.unitn.it:/data/mpobitzer/videos/painvidpro_0_2_0/$ART_MEDIA/$SOURCE/$VIDEO_ID/" "$BASE_DIR/$SOURCE/$VIDEO_ID/"
+
 # Run the processing script
 python -m painvidpro.pipeline.process_video_by_id \
     --dir "$BASE_DIR" \
     --source "$SOURCE" \
     --video_id "$VIDEO_ID"
 
+PYTHON_EXIT=$?
+
+# Save the computed data to the storage server and clean up
+rsync -avPh "$BASE_DIR/$SOURCE/$VIDEO_ID" "mpobitzer@sinaia.disi.unitn.it:/data/mpobitzer/datataset/painvidpro_0_2_0/$ART_MEDIA/$SOURCE/"
+rm -rf -- "$BASE_DIR/$SOURCE/$VIDEO_ID"
+
 # Exit with status from python command
-exit $?
+exit $PYTHON_EXIT
