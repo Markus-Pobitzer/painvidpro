@@ -98,7 +98,11 @@ class ProcessorSAM3(ProcessorBase):
             "yt_video_format": "bestvideo[height<=480]",
             "sam3_model": "facebook/sam3",
             "sam3_config": {},
-            "occlusion_masking_config": {"prompt": ["a hand", "a paintbrush", "a pencil", "an arm"]},
+            "occlusion_masking_config":
+                {
+                    "prompt": ["a hand", "a paintbrush", "a pencil", "an arm"],
+                    "kernel": [35, 10, 10, 35],
+                },
             "disable_tqdm": True,
             "remove_videos_after_processing": False,
             "start_end_frame_detector_config": {"prompt": "a human hand"},
@@ -435,6 +439,7 @@ class ProcessorSAM3(ProcessorBase):
         if isinstance(prompt, str):
             prompt = [prompt]
         frame_list = [frame] * len(prompt)
+        kernel_list = self.params.get("occlusion_masking_config", {}).get("kernel", [35] * len(prompt))
         # Could run OOM if to many prompt items
         inputs = self.sam3_processor(images=frame_list, text=prompt, return_tensors="pt").to(self.device)
         with torch.no_grad():
@@ -448,9 +453,17 @@ class ProcessorSAM3(ProcessorBase):
         mask_list: List[np.ndarray] = [empty_mask] + [
             res["masks"].cpu().numpy().any(axis=0) for res in results if len(res["masks"]) != 0
         ]
+        
+        # We assume each prompt needs to have a kernel
+        if len(kernel_list) == len(results):
+            kernel_list = [0] + [kernel_list[idx] for idx in range(len(results)) if len(results[idx]["masks"]) != 0]
+            for idx in range(len(mask_list)):
+                k = kernel_list[idx]
+                mask_list[idx] = cv2.dilate(np.uint8(mask_list[idx]), np.ones((k, k), np.uint8), iterations=1).astype(bool)
+
         # Combine masks of all prompts
         mask = np.stack(mask_list, axis=0).any(axis=0)
-        # Dilate for better coverage
+        # Dilate everything at once for better coverage
         mask = cv2.dilate(np.uint8(mask), kernel, iterations=1).astype(bool)
 
         if prev_extr_frame is not None:
