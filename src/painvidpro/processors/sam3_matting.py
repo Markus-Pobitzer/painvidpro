@@ -453,9 +453,10 @@ class ProcessorSAM3(ProcessorBase):
         mask_list: List[np.ndarray] = [empty_mask] + [
             res["masks"].cpu().numpy().any(axis=0) for res in results if len(res["masks"]) != 0
         ]
-        kernel_list = [0] + kernel_list
         
-        if len(kernel_list) == len(mask_list):
+        # We assume each prompt needs to have a kernel
+        if len(kernel_list) == len(results):
+            kernel_list = [0] + [kernel_list[idx] for idx in range(len(results)) if len(results[idx]["masks"]) != 0]
             for idx in range(len(mask_list)):
                 k = kernel_list[idx]
                 mask_list[idx] = cv2.dilate(np.uint8(mask_list[idx]), np.ones((k, k), np.uint8), iterations=1).astype(bool)
